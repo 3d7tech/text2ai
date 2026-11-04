@@ -66,8 +66,26 @@
     padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
     border-top: 1px solid var(--line); background: var(--bg);
   }
-  #attach { width: 42px; height: 42px; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center; flex: none; cursor: pointer; color: var(--fg); }
-  #attach svg { width: 22px; height: 22px; }
+  #attach, #mic { width: 42px; height: 42px; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center; flex: none; cursor: pointer; color: var(--fg); }
+  #attach svg, #mic svg { width: 22px; height: 22px; }
+  #mic { background: none; padding: 0; }
+  form#composer[hidden], #recbar[hidden] { display: none; }
+  #recbar { display: flex; align-items: center; gap: 10px; padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--bg); }
+  #recbar .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--bad); animation: blink 1s infinite; flex: none; }
+  @keyframes blink { 50% { opacity: .3; } }
+  @media (prefers-reduced-motion: reduce) { #recbar .dot { animation: none; } }
+  #recTime { font: 1rem ui-monospace, Menlo, monospace; }
+  #recbar .grow { flex: 1; color: var(--muted); font-size: .9rem; }
+  #recbar button { height: 42px; border-radius: 21px; padding: 0 16px; font: inherit; border: 1px solid var(--line); background: none; color: var(--fg); }
+  #recbar #recSend { background: var(--accent); color: var(--accent-fg); border: 0; font-weight: 600; }
+  .voice { display: flex; align-items: center; gap: 10px; background: var(--bubble); border: 1px solid var(--line); border-radius: 18px; padding: 8px 12px; width: min(80%, 320px); }
+  .mine .voice { background: var(--mine); }
+  .voice .play { border: 0; background: var(--accent); color: var(--accent-fg); width: 36px; height: 36px; border-radius: 50%; flex: none; display: grid; place-items: center; padding: 0; }
+  .voice .play svg { width: 16px; height: 16px; }
+  .voice .track { flex: 1; min-width: 60px; height: 6px; background: var(--line); border-radius: 3px; position: relative; cursor: pointer; }
+  .voice .track i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--accent); border-radius: 3px; }
+  .voice .t { font: .78rem ui-monospace, Menlo, monospace; color: var(--muted); min-width: 34px; text-align: right; }
+  .voice .speed { background: none; color: var(--fg); border: 1px solid var(--line); height: 26px; padding: 0 8px; border-radius: 999px; font: .78rem system-ui, sans-serif; flex: none; }
   #text { flex: 1; resize: none; border: 1px solid var(--line); border-radius: 20px; padding: 10px 14px; font: inherit; background: var(--bubble); color: var(--fg); max-height: 30vh; min-height: 42px; }
   #send { height: 42px; border: 0; border-radius: 21px; padding: 0 18px; background: var(--accent); color: var(--accent-fg); font: inherit; font-weight: 600; flex: none; }
   #send:disabled { opacity: .5; }
@@ -105,10 +123,27 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg>
     <input id="files" type="file" accept="image/*,video/*" multiple hidden>
   </label>
+  <button id="mic" type="button" title="Record a voice note" aria-label="Record a voice note">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/></svg>
+  </button>
+  <input id="voiceCapture" type="file" hidden>
   <textarea id="text" rows="1" placeholder="Message" enterkeyhint="send"></textarea>
   <button id="send" type="submit">Send</button>
 </form>
+<div id="recbar" hidden>
+  <span class="dot"></span><span id="recTime">0:00</span><span class="grow">Recording…</span>
+  <button type="button" id="recCancel">Cancel</button>
+  <button type="button" id="recSend">Send</button>
+</div>
 <div id="toast"></div>
+<div class="overlay" id="voiceTip" hidden>
+  <div class="card">
+    <h2>Record a voice note</h2>
+    <p id="voiceTipText">Your camera opens in video mode. Record your message, then tap <strong>Use Video</strong>. Only the sound is sent, squeezed into a small file.</p>
+    <button type="button" id="voiceTipOk">Open camera</button>
+    <button type="button" class="secondary" id="voiceTipCancel">Cancel</button>
+  </div>
+</div>
 
 <div class="overlay" id="gate" hidden>
   <div class="card">
@@ -272,9 +307,13 @@
     if (m.media) {
       const box = document.createElement('div'); box.className = 'media';
       const src = '/media/' + encodeURIComponent(m.media) + '?' + K;
-      if ((m.mediaType || '').startsWith('video/')) {
+      if ((m.mediaType || '').startsWith('audio/')) {
+        row.appendChild(voicePlayer(src));
+      } else if ((m.mediaType || '').startsWith('video/')) {
         const v = document.createElement('video');
-        v.src = src; v.controls = true; v.playsInline = true; v.preload = 'metadata';
+        v.src = src; v.controls = true; v.playsInline = true;
+        // With a preview frame, nothing downloads until someone taps play.
+        if (m.thumb) { v.poster = '/media/' + encodeURIComponent(m.thumb) + '?' + K; v.preload = 'none'; } else v.preload = 'metadata';
         v.setAttribute('playsinline', '');
         v.addEventListener('loadedmetadata', () => { if (stick) list.scrollTop = list.scrollHeight; });
         box.appendChild(v);
@@ -287,13 +326,221 @@
         img.addEventListener('load', () => { if (stick) list.scrollTop = list.scrollHeight; });
         a.appendChild(img); box.appendChild(a);
       }
-      row.appendChild(box);
+      if (box.childNodes.length) row.appendChild(box);
     }
     if (m.text) {
       const b = document.createElement('div'); b.className = 'bubble'; b.textContent = m.text; row.appendChild(b);
     }
     list.appendChild(row);
     if (stick) list.scrollTop = list.scrollHeight;
+  }
+
+  // --- voice player (WhatsApp-style: play, progress, time, speed)
+  const ICON_PLAY = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg>';
+  const ICON_PAUSE = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>';
+  const fmtDur = (s) => (isFinite(s) && s > 0) ? Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0') : '0:00';
+  let playingAudio = null;
+  function voicePlayer(src) {
+    const wrap = document.createElement('div'); wrap.className = 'voice';
+    const a = new Audio(); a.preload = 'metadata'; a.src = src;
+    const play = document.createElement('button'); play.type = 'button'; play.className = 'play'; play.innerHTML = ICON_PLAY; play.setAttribute('aria-label', 'Play voice note');
+    const track = document.createElement('div'); track.className = 'track'; const fill = document.createElement('i'); track.appendChild(fill);
+    const t = document.createElement('span'); t.className = 't'; t.textContent = '0:00';
+    const speed = document.createElement('button'); speed.type = 'button'; speed.className = 'speed'; speed.textContent = '1×';
+    const rates = [1, 1.5, 2];
+    play.onclick = () => {
+      if (a.paused) { if (playingAudio && playingAudio !== a) playingAudio.pause(); playingAudio = a; a.play().catch(() => toast('Could not play this voice note')); }
+      else a.pause();
+    };
+    a.onplay = () => { play.innerHTML = ICON_PAUSE; play.setAttribute('aria-label', 'Pause'); };
+    a.onpause = () => { play.innerHTML = ICON_PLAY; play.setAttribute('aria-label', 'Play voice note'); };
+    a.onloadedmetadata = () => { t.textContent = fmtDur(a.duration); };
+    a.ontimeupdate = () => {
+      if (isFinite(a.duration) && a.duration > 0) fill.style.width = (100 * a.currentTime / a.duration) + '%';
+      t.textContent = fmtDur(a.currentTime || a.duration);
+    };
+    a.onended = () => { fill.style.width = '0'; t.textContent = fmtDur(a.duration); };
+    track.onclick = (e) => {
+      if (!isFinite(a.duration)) return;
+      const r = track.getBoundingClientRect(); a.currentTime = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * a.duration;
+    };
+    speed.onclick = () => { const i = (rates.indexOf(a.playbackRate) + 1) % rates.length; a.playbackRate = rates[i]; speed.textContent = rates[i] + '×'; };
+    wrap.append(play, track, t, speed);
+    return wrap;
+  }
+
+  // --- voice notes and video: record with the device, compress on this device, then send
+  const MB_URL = '/vendor/mediabunny-1.62.0.min.mjs';
+  let mbPromise = null;
+  const loadMb = () => mbPromise || (mbPromise = import(MB_URL));
+  const fmtMB = (n) => (n / 1048576).toFixed(n < 1048576 ? 2 : 1) + ' MB';
+  const VOICE_BITRATE = 24000, VIDEO_BITRATE = 400000, VIDEO_MAX_SIDE = 640, VIDEO_MAX_SECONDS = 180;
+
+  /** Some browsers' encoders can produce silent audio, so every result is checked for real sound. */
+  async function soundCheck(blob) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return { ok: true, duration: 0 };
+    const ctx = new AC();
+    try {
+      const buf = await ctx.decodeAudioData(await blob.arrayBuffer());
+      const d = buf.getChannelData(0); let sum = 0, n = 0;
+      for (let i = 0; i < d.length; i += 37) { sum += d[i] * d[i]; n++; }
+      return { ok: buf.duration > 0.3 && Math.sqrt(sum / Math.max(1, n)) > 0.0008, duration: buf.duration };
+    } catch { return { ok: false, duration: 0 }; }
+    finally { try { ctx.close(); } catch {} }
+  }
+
+  async function convert(file, { video, audio, trimEnd, onProgress }) {
+    const M = await loadMb();
+    const input = new M.Input({ source: new M.BlobSource(file), formats: M.ALL_FORMATS });
+    const output = new M.Output({ format: new M.Mp4OutputFormat({ fastStart: 'in-memory' }), target: new M.BufferTarget() });
+    const opts = { input, output, video, audio, showWarnings: false };
+    if (trimEnd) opts.trim = { end: trimEnd };
+    const conv = await M.Conversion.init(opts);
+    if (!conv.isValid) throw new Error('This recording cannot be converted here');
+    if (onProgress) conv.onProgress = (p) => onProgress(Math.min(1, p));
+    await conv.execute();
+    return output.target.buffer;
+  }
+
+  /** Voice note: keep only the sound, mono, about 24 kbps (roughly 180 KB per minute). */
+  async function prepareVoice(file, onProgress) {
+    const M = await loadMb();
+    const codec = await M.getFirstEncodableAudioCodec(['aac', 'opus'], { numberOfChannels: 1, bitrate: VOICE_BITRATE });
+    if (codec) {
+      try {
+        const buf = await convert(file, { video: { discard: true }, audio: { codec, numberOfChannels: 1, bitrate: VOICE_BITRATE, forceTranscode: true }, onProgress });
+        const blob = new Blob([buf], { type: 'audio/mp4' });
+        if ((await soundCheck(blob)).ok) return blob;
+      } catch (e) { console.warn('voice compression failed, keeping the original sound', e); }
+    }
+    // Fallback: copy the recording's own sound track as it is (bigger, but never silent).
+    const buf = await convert(file, { video: { discard: true }, audio: {}, onProgress });
+    return new Blob([buf], { type: 'audio/mp4' });
+  }
+
+  async function posterFrame(M, track, duration) {
+    try {
+      const scale = Math.min(1, 480 / Math.max(track.displayWidth, track.displayHeight));
+      const sink = new M.CanvasSink(track, { width: Math.round(track.displayWidth * scale), height: Math.round(track.displayHeight * scale), fit: 'contain' });
+      const w = await sink.getCanvas(Math.min(0.5, duration / 2));
+      if (!w) return null;
+      const c = w.canvas;
+      return c.convertToBlob ? await c.convertToBlob({ type: 'image/jpeg', quality: 0.7 })
+        : await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.7));
+    } catch (e) { console.warn('no preview frame', e); return null; }
+  }
+
+  /** Video: about 360p, 24 fps, 400 kbps, mono sound; at most 3 minutes. */
+  async function prepareVideo(file, onProgress) {
+    const M = await loadMb();
+    const input = new M.Input({ source: new M.BlobSource(file), formats: M.ALL_FORMATS });
+    const track = await input.getPrimaryVideoTrack();
+    if (!track) throw new Error('No video found');
+    const duration = await input.computeDuration();
+    const scale = Math.min(1, VIDEO_MAX_SIDE / Math.max(track.displayWidth, track.displayHeight));
+    const even = (x) => Math.max(2, Math.round(x / 2) * 2);
+    const width = even(track.displayWidth * scale), height = even(track.displayHeight * scale);
+    const vcodec = await M.getFirstEncodableVideoCodec(['avc', 'vp9', 'av1'], { width, height, bitrate: VIDEO_BITRATE });
+    if (!vcodec) throw new Error('This device cannot compress video');
+    const poster = await posterFrame(M, track, duration);
+    const hasAudio = !!(await input.getPrimaryAudioTrack());
+    const acodec = await M.getFirstEncodableAudioCodec(['aac', 'opus'], { numberOfChannels: 1, bitrate: 32000 });
+    const trimEnd = duration > VIDEO_MAX_SECONDS ? VIDEO_MAX_SECONDS : undefined;
+    const video = { codec: vcodec, width, height, fit: 'contain', frameRate: 24, bitrate: VIDEO_BITRATE };
+    let buf = null;
+    if (hasAudio && acodec) {
+      buf = await convert(file, { video, audio: { codec: acodec, numberOfChannels: 1, bitrate: 32000, forceTranscode: true }, trimEnd, onProgress });
+      const original = await soundCheck(file);
+      if (original.ok && !(await soundCheck(new Blob([buf], { type: 'video/mp4' }))).ok) buf = null; // lost its sound: redo, copying the original sound
+    }
+    if (!buf) buf = await convert(file, { video, audio: hasAudio ? {} : { discard: true }, trimEnd, onProgress });
+    return { blob: new Blob([buf], { type: 'video/mp4' }), poster, trimmed: !!trimEnd };
+  }
+
+  // Recording straight from the microphone works on secure pages (the hub computer itself).
+  // Elsewhere (iPhones over the home Wi-Fi) the camera records and only its sound is kept.
+  const canMic = !!(window.isSecureContext && navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
+  const touch = matchMedia('(pointer: coarse)').matches;
+  const voiceInput = $('voiceCapture');
+  if (touch) { voiceInput.accept = 'video/*'; voiceInput.setAttribute('capture', 'user'); }
+  else {
+    voiceInput.accept = 'audio/*,video/*';
+    $('voiceTipText').textContent = 'This browser cannot use the microphone here. Choose a recording from this device; only its sound is sent, squeezed into a small file.';
+    $('voiceTipOk').textContent = 'Choose a recording';
+  }
+
+  let rec = null, recChunks = [], recTimer = null, recStart = 0, recStream = null;
+  async function startRecording() {
+    try {
+      recStream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
+    } catch { toast('Allow the microphone to record voice notes'); return; }
+    const types = ['audio/mp4;codecs=mp4a.40.2', 'audio/mp4', 'audio/webm;codecs=opus', 'audio/webm'];
+    const mimeType = types.find((t) => MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t));
+    rec = new MediaRecorder(recStream, mimeType ? { mimeType, audioBitsPerSecond: 32000 } : { audioBitsPerSecond: 32000 });
+    recChunks = [];
+    rec.ondataavailable = (e) => { if (e.data && e.data.size) recChunks.push(e.data); };
+    rec.start(250);
+    recStart = Date.now();
+    $('recTime').textContent = '0:00';
+    $('composer').hidden = true; $('recbar').hidden = false;
+    recTimer = setInterval(() => {
+      const sec = Math.floor((Date.now() - recStart) / 1000);
+      $('recTime').textContent = fmtDur(sec);
+      if (sec >= 300) stopRecording(true); // 5 minutes at most
+    }, 250);
+  }
+  function stopRecording(send) {
+    if (!rec) return;
+    const r = rec; rec = null; clearInterval(recTimer);
+    const length = Date.now() - recStart;
+    $('recbar').hidden = true; $('composer').hidden = false;
+    r.onstop = () => {
+      if (recStream) recStream.getTracks().forEach((t) => t.stop());
+      if (!send) return;
+      const blob = new Blob(recChunks, { type: r.mimeType || 'audio/webm' });
+      if (length < 700 || !blob.size) { toast('Record for a little longer'); return; }
+      sendVoice(blob);
+    };
+    r.stop();
+  }
+  $('recCancel').addEventListener('click', () => stopRecording(false));
+  $('recSend').addEventListener('click', () => stopRecording(true));
+
+  $('mic').addEventListener('click', () => {
+    if (!name) { askName(); return; }
+    if (canMic) { startRecording(); return; }
+    if (store.get('voiceTipSeen')) { voiceInput.click(); return; }
+    $('voiceTip').hidden = false;
+  });
+  $('voiceTipOk').addEventListener('click', () => { store.set('voiceTipSeen', '1'); $('voiceTip').hidden = true; voiceInput.click(); });
+  $('voiceTipCancel').addEventListener('click', () => { $('voiceTip').hidden = true; });
+  voiceInput.addEventListener('change', () => {
+    const f = voiceInput.files[0]; voiceInput.value = '';
+    if (f) sendVoice(f);
+  });
+
+  async function sendVoice(file) {
+    if (busy) { toast('Wait for the last message to finish sending'); return; }
+    busy = true; sendBtn.disabled = true;
+    try {
+      showProgress('Preparing voice note…', 0);
+      let out;
+      try {
+        out = await prepareVoice(file, (p) => showProgress('Preparing voice note… ' + Math.round(p * 100) + '%', p));
+      } catch (e) {
+        console.warn(e);
+        if (!(file.type || '').startsWith('audio/')) throw new Error("This device couldn't turn the recording into a voice note");
+        out = file; // already a microphone recording: send it as it is
+      }
+      const label = 'Sending voice note (' + fmtMB(out.size) + ')…';
+      const up = await upload(new File([out], 'voice.m4a', { type: out.type || 'audio/mp4' }), label);
+      await post({ text: '', media: up.id, mediaType: up.type });
+    } catch (err) {
+      toast(err.message || 'Could not send the voice note');
+    } finally {
+      showProgress(null); busy = false; sendBtn.disabled = false;
+    }
   }
 
   // --- live updates (Server-Sent Events, auto-resumes from the last message seen)
@@ -437,6 +684,23 @@
       for (let i = 0; i < toSend.length; i++) {
         const label = 'Sending ' + (i + 1) + ' of ' + toSend.length + '…';
         showProgress(label, 0);
+        if ((toSend[i].type || '').startsWith('video/')) {
+          let out;
+          try {
+            out = await prepareVideo(toSend[i], (p) => showProgress('Compressing video ' + (i + 1) + ' of ' + toSend.length + '… ' + Math.round(p * 100) + '%', p));
+          } catch (e) {
+            console.warn('video compression failed, sending the original', e);
+            out = { blob: toSend[i], poster: null, trimmed: false };
+            toast('Sending this video without compressing it');
+          }
+          if (out.trimmed) toast('Videos are limited to 3 minutes. The rest was cut.');
+          const poster = out.poster ? await upload(new File([out.poster], 'poster.jpg', { type: 'image/jpeg' }), label) : null;
+          const vlabel = 'Sending video (' + fmtMB(out.blob.size) + ')…';
+          const vfile = out.blob === toSend[i] ? toSend[i] : new File([out.blob], 'video.mp4', { type: 'video/mp4' });
+          const up = await upload(vfile, vlabel);
+          await post({ text: i === 0 ? msg : '', media: up.id, mediaType: up.type, thumb: poster ? poster.id : '' });
+          continue;
+        }
         const thumbFile = await makeThumb(toSend[i]);
         const thumb = thumbFile ? await upload(thumbFile, label) : null;
         const f = await shrinkImage(toSend[i]);
