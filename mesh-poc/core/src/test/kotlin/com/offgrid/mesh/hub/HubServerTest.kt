@@ -71,6 +71,16 @@ class HubServerTest {
         assertTrue("testkey123" !in anon, "key must not leak without the key")
     }
 
+    @Test fun `page carries the key in its manifest link so Add to Home Screen keeps it`() {
+        hub.start(0)
+        val withKey = conn("/").inputStream.readBytes().decodeToString()
+        assertTrue("href=\"/manifest.webmanifest?k=testkey123\"" in withKey)
+        val without = conn("/", key = false).inputStream.readBytes().decodeToString()
+        assertTrue("href=\"/manifest.webmanifest\"" in without && "testkey123" !in without)
+        val wrong = conn("/?k=nope", key = false).inputStream.readBytes().decodeToString()
+        assertTrue("testkey123" !in wrong)
+    }
+
     @Test fun `api requires the household key`() {
         hub.start(0)
         assertEquals(401, conn("/api/history", key = false).responseCode)

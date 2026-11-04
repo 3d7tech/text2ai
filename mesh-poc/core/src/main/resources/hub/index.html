@@ -113,7 +113,12 @@
 <div class="overlay" id="gate" hidden>
   <div class="card">
     <h2>Join your household</h2>
-    <p>Open this page by scanning the QR code on the hub tablet (Offgrid Mesh → Household hub). That code contains your household key.</p>
+    <p>Scan the QR code on the hub, or type your household code. The hub shows it under <strong>Invite</strong>.</p>
+    <form id="joinForm">
+      <label class="small" for="codeInput">Household code</label>
+      <input id="codeInput" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off" placeholder="e.g. yukyar34cg" required>
+      <button type="submit">Join</button>
+    </form>
   </div>
 </div>
 <div class="overlay" id="invite" hidden>
@@ -125,6 +130,7 @@
     <p class="hint" id="hostHint">On a Chromebook hub: Settings → Network → Wi-Fi → your network → IP address.</p>
     <img id="qrImg" alt="QR code for joining Family Chat">
     <div id="inviteUrl"></div>
+    <p class="hint" style="text-align:center">Household code: <strong id="householdCode"></strong></p>
     <button type="button" id="copyInvite">Copy link</button>
     <button type="button" class="secondary" id="closeInvite">Done</button>
   </div>
@@ -208,6 +214,17 @@
     img.src = '/api/qr.svg?' + K + '&text=' + encodeURIComponent(url);
     $('inviteUrl').textContent = url;
   }
+  $('householdCode').textContent = key;
+  $('joinForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    let v = $('codeInput').value.trim();
+    const m = v.match(/[?&]k=([^&#\s]+)/); // a pasted link works too
+    if (m) v = decodeURIComponent(m[1]);
+    v = v.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!v) return;
+    store.set('hubKey', v);
+    location.replace('/?k=' + encodeURIComponent(v));
+  });
   $('inviteBtn').addEventListener('click', () => {
     const here = isLan(location.hostname);
     $('hostInput').value = here ? location.host : (store.get('hubHost') || '');

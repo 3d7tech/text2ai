@@ -58,8 +58,7 @@ class HubServer(
         val head = req.method == "HEAD"
         val p = req.path
         when {
-            get && (p == "/" || p == "/index.html") ->
-                res.send(200, "text/html; charset=utf-8", asset("index.html"), mapOf("Cache-Control" to "no-cache"), head)
+            get && (p == "/" || p == "/index.html") -> res.send(200, "text/html; charset=utf-8", page(req), mapOf("Cache-Control" to "no-cache"), head)
             get && (p == "/apple-touch-icon.png" || p == "/icon-192.png" || p == "/icon-512.png") ->
                 res.send(200, "image/png", asset(p.removePrefix("/")), mapOf("Cache-Control" to "max-age=86400"), head)
             get && p == "/manifest.webmanifest" -> res.send(200, "application/manifest+json", manifest(req).toByteArray(), head = head)
@@ -81,6 +80,20 @@ class HubServer(
             }
             else -> res.text(404, "Not found")
         }
+    }
+
+    /**
+     * The web app, with the household key already in its manifest link when the visitor has it.
+     * iOS reads the manifest before any script runs, so "Add to Home Screen" must find the key there;
+     * the home-screen app has its own storage and would otherwise open without it.
+     */
+    private fun page(req: HttpRequest): ByteArray {
+        val html = asset("index.html").decodeToString()
+        if (!authorized(req)) return html.toByteArray()
+        return html.replace(
+            """href="/manifest.webmanifest"""",
+            """href="/manifest.webmanifest?k=$key"""",
+        ).toByteArray()
     }
 
     private fun manifest(req: HttpRequest): String {
