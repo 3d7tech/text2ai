@@ -21,6 +21,9 @@
     <!-- Needed for BLE scan <= 11 and Wi-Fi Aware <= 12 -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="32" />
 
+    <!-- Local sockets only: serves the APK to nearby phones over this phone's hotspot -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <!-- Keep relaying while the screen is off -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
@@ -41,6 +44,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".ShareNearbyActivity"
+            android:exported="false" />
+
+        <provider
+            android:name=".ApkProvider"
+            android:authorities="${applicationId}.share"
+            android:exported="false"
+            android:grantUriPermissions="true" />
 
         <service
             android:name=".MeshService"
