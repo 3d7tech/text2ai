@@ -175,6 +175,18 @@ class MeshSimulationTest {
         assertContentEquals(data, out)
     }
 
+    @Test fun `hub relays browser messages under the sender's name with a known id`() {
+        val (hub, phone) = listOf("hub-tablet", "phone").map { TestNode(it, exec) }; exec.drain()
+        link(hub, phone)
+        val seen = mutableListOf<ChatMessage>()
+        hub.node.addListener(object : MeshNode.Listener { override fun onMessage(message: ChatMessage) { seen += message } })
+        val id = PacketId.random()
+        val sent = hub.node.sendBroadcast("from Safari", asNick = "Mum (iPhone)", packetId = id); exec.drain()
+        assertEquals(id, sent.id)
+        assertEquals("Mum (iPhone)", phone.inbox.single().nick)
+        assertEquals(id, seen.single().id) // outgoing echo carries the id the bridge uses to skip it
+    }
+
     @Test fun `node ids round-trip through hex`() {
         repeat(1000) { val id = NodeId.random(); assertEquals(id, NodeId.parse(id.hex())) }
         assertTrue(NodeId.BROADCAST.isBroadcast)

@@ -42,6 +42,27 @@ Chat commands: `/nick Amaka`, `/peers`, `/dm Amaka hello`.
 Try the data-mule demo: phone A sends a message while only B is near it. Walk B out of
 range of A and over to C, and C receives it.
 
+## Household hub: iPhones, Chromebooks, tablets
+
+Browsers can't use Bluetooth mesh or Wi-Fi Aware, so non-Android devices join through a **hub**:
+an Android device (ideally a plugged-in tablet) running the app with **Hub → Run the hub on this device**.
+
+- Every device on the same Wi-Fi opens the hub's address. The router needs no internet,
+  or the hub tablet's hotspot can be used instead. Scan the QR code on the hub screen.
+- **iPhone/iPad:** open in Safari → Share → **Add to Home Screen**. **Chromebook:** Chrome → ⋮ → Cast, save and share →
+  Create shortcut → Open as window. **Android:** install the app, or add the page to the home screen.
+- Text, **photos** (shrunk on the sending device to ≤1600 px) and **videos** (up to 300 MB each, with HTTP Range so
+  iOS can play them) are stored on the hub (`filesDir/hub`, 4 GB cap, oldest media removed first).
+- The QR code carries a household key; without it the API returns 401.
+- Bridging: browser text is re-broadcast on the mesh under the sender's name (media becomes a short note);
+  public mesh messages appear in the browsers, marked "via mesh".
+
+Code: `core/.../hub/` (HTTP server, store, routes; JVM-tested) and `core/src/main/resources/hub/index.html` (web app).
+Try it on a laptop: `gradle -p core runHubDemo`, then open http://127.0.0.1:8090/?k=demokey123
+
+Known limits: the hub is a single point (if it's off, browsers can't chat); videos recorded in HEVC on iPhones
+may not play on Chromebooks or older Android (set iPhone Camera → Formats → Most Compatible); no encryption yet.
+
 ## Sharing the app without internet
 
 Tap **Share app** (top right). Pick whichever way the other phone can receive it:
@@ -82,7 +103,11 @@ a shared copy installs over (or gets updated by) any other copy.
 
 ## Verified so far
 
-- `core` unit tests (30): sharing server (exact bytes, headers, 404/405, junk requests, parallel
+- `core` unit tests (43): household hub (key check, unicode/escaping, live SSE stream, resume from
+  Last-Event-ID, photo/video upload, Range requests, validation, restart persistence, bridge hooks, concurrency),
+- end-to-end browser test (Chromium, phone + laptop viewports): text both ways, photo shrink 3000→1600 px,
+  video upload and playback, reload without duplicates. Safari/WebKit not yet tested.
+- earlier tests: sharing server (exact bytes, headers, 404/405, junk requests, parallel
   downloads, port fallback), zip packaging, Wi-Fi QR escaping, plus mesh tests (8 original, 14 simulation/fuzz): packet round-trip, out-of-order fragment reassembly, multi-hop relay,
   no duplicates in a full mesh, TTL limit, DM privacy from relays (delivery only), data-mule store-and-forward,
   dual-radio de-duplication.

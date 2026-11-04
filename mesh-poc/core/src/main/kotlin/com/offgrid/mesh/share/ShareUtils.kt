@@ -42,8 +42,8 @@ object LocalAddresses {
     private val skip = listOf("lo", "rmnet", "ccmni", "dummy", "tun", "v4-", "ip6tnl", "p2p")
     private val hotspotHints = listOf("ap", "swlan", "softap", "wlan1", "wigig")
 
-    /** Private IPv4 addresses of this device, hotspot-looking interfaces first. */
-    fun siteLocalIpv4(): List<Address> {
+    /** Private IPv4 addresses of this device; hotspot-looking interfaces first, or home Wi-Fi first. */
+    fun siteLocalIpv4(preferHotspot: Boolean = true): List<Address> {
         val all = runCatching { NetworkInterface.getNetworkInterfaces()?.toList().orEmpty() }.getOrDefault(emptyList())
         return all
             .filter { runCatching { it.isUp && !it.isLoopback }.getOrDefault(false) }
@@ -54,6 +54,15 @@ object LocalAddresses {
                     .filter { it.isSiteLocalAddress }
                     .map { Address(nif.name, it.hostAddress) }
             }
-            .sortedBy { a -> if (hotspotHints.any { a.iface.startsWith(it) }) 0 else if (a.iface.startsWith("wlan")) 1 else 2 }
+            .sortedBy { a ->
+                val hotspot = hotspotHints.any { a.iface.startsWith(it) }
+                val wifi = a.iface.startsWith("wlan") && !hotspot
+                when {
+                    preferHotspot && hotspot -> 0
+                    !preferHotspot && wifi -> 0
+                    hotspot || wifi -> 1
+                    else -> 2
+                }
+            }
     }
 }

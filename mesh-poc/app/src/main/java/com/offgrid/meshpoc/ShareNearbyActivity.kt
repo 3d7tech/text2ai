@@ -3,7 +3,6 @@ package com.offgrid.meshpoc
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.graphics.Bitmap
-import android.graphics.Color
 import android.graphics.Typeface
 import android.net.wifi.WifiManager
 import android.os.Build
@@ -17,9 +16,6 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
-import com.google.zxing.BarcodeFormat
-import com.google.zxing.EncodeHintType
-import com.google.zxing.qrcode.QRCodeWriter
 import com.offgrid.mesh.share.ApkWebServer
 import com.offgrid.mesh.share.LocalAddresses
 import com.offgrid.mesh.share.WifiQr
@@ -161,10 +157,5 @@ class ShareNearbyActivity : Activity() {
         }
     }
 
-    private fun qr(text: String): Bitmap {
-        val size = 512
-        val m = QRCodeWriter().encode(text, BarcodeFormat.QR_CODE, size, size, mapOf(EncodeHintType.MARGIN to 1))
-        val px = IntArray(size * size) { i -> if (m.get(i % size, i / size)) Color.BLACK else Color.WHITE }
-        return Bitmap.createBitmap(px, size, size, Bitmap.Config.ARGB_8888)
-    }
+    private fun qr(text: String): Bitmap = Qr.bitmap(text)
 }

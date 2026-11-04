@@ -21,7 +21,7 @@
     <!-- Needed for BLE scan <= 11 and Wi-Fi Aware <= 12 -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="32" />
 
-    <!-- Local sockets only: serves the APK to nearby phones over this phone's hotspot -->
+    <!-- Local sockets only: serves the APK and the household hub on the local Wi-Fi -->
     <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- Keep relaying while the screen is off -->
@@ -44,6 +44,10 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".HubActivity"
+            android:exported="false" />
 
         <activity
             android:name=".ShareNearbyActivity"

@@ -27,11 +27,13 @@ class MeshService : Service() {
         val radios = mutableListOf<Transport>(BleTransport(this))
         if (WifiAwareTransport.isSupported(this)) radios += WifiAwareTransport(this)
         Mesh.node(this).start(radios)
+        if (Mesh.hubEnabled(this)) Mesh.startHub(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
 
     override fun onDestroy() {
+        Mesh.stopHub()
         Mesh.node(this).stop()
         super.onDestroy()
     }

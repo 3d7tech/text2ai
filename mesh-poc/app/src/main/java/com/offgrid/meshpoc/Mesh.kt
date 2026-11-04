@@ -35,6 +35,34 @@ object Mesh : MeshNode.Listener {
             .edit().putString("nick", nick).apply()
     }
 
+    // ---------------------------------------------------------------- household hub
+
+    @Volatile var hub: HubBridge? = null
+        private set
+
+    fun hubEnabled(context: Context): Boolean =
+        context.applicationContext.getSharedPreferences("mesh", Context.MODE_PRIVATE).getBoolean("hubEnabled", false)
+
+    /** Remembers the choice and starts/stops the hub (which lives as long as [MeshService]). */
+    @Synchronized
+    fun setHubEnabled(context: Context, on: Boolean) {
+        context.applicationContext.getSharedPreferences("mesh", Context.MODE_PRIVATE)
+            .edit().putBoolean("hubEnabled", on).apply()
+        if (on) startHub(context) else stopHub()
+    }
+
+    @Synchronized
+    fun startHub(context: Context) {
+        if (hub != null) return
+        hub = HubBridge(context.applicationContext, node(context)).also { it.start() }
+    }
+
+    @Synchronized
+    fun stopHub() {
+        hub?.stop()
+        hub = null
+    }
+
     fun addUiListener(l: MeshNode.Listener) { uiListeners += l }
     fun removeUiListener(l: MeshNode.Listener) { uiListeners -= l }
 
