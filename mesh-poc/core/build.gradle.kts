@@ -28,16 +28,3 @@ tasks.register<JavaExec>("runHubDemo") {
     mainClass.set("com.offgrid.mesh.hub.HubMainKt")
     args = (project.findProperty("hubArgs") as String?)?.split(" ") ?: emptyList()
 }
-
-/** Single-file hub for Chromebooks (Linux) and any computer with Java 17+: java -jar offgrid-hub.jar */
-tasks.register<Jar>("hubJar") {
-    description = "Builds offgrid-hub.jar, the standalone household hub."
-    archiveFileName.set("offgrid-hub.jar")
-    destinationDirectory.set(layout.buildDirectory.dir("hub"))
-    manifest { attributes["Main-Class"] = "com.offgrid.mesh.hub.HubMainKt" }
-    from(sourceSets["main"].output)
-    dependsOn(configurations.runtimeClasspath)
-    from({ configurations.runtimeClasspath.get().filter { it.name.endsWith(".jar") }.map { zipTree(it) } })
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA", "META-INF/versions/9/module-info.class")
-}

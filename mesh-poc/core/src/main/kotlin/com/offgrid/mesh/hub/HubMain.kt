@@ -8,6 +8,21 @@ import java.io.File
  * Made for a Chromebook's Linux environment, but runs on any computer with Java 17+.
  * The household key is created once and kept in the data folder, so the QR codes stay valid.
  */
+/** Default data folder: ~/Library/Application Support/Family Chat Hub on a Mac, ~/offgrid-hub elsewhere. */
+fun defaultHubDir(): File {
+    val home = System.getProperty("user.home")
+    val mac = System.getProperty("os.name").orEmpty().lowercase().contains("mac")
+    return if (mac) File(home, "Library/Application Support/Family Chat Hub") else File(home, "offgrid-hub")
+}
+
+/** Loads (or creates once) the household key kept in [dir]. */
+fun householdKey(dir: File, override: String? = null): String {
+    val keyFile = File(dir, "household.key")
+    if (override != null) { keyFile.writeText(override); return override }
+    return keyFile.takeIf { it.isFile }?.readText()?.trim()?.takeIf { it.isNotEmpty() }
+        ?: HubServer.newKey().also { keyFile.writeText(it) }
+}
+
 fun main(args: Array<String>) {
     val opts = HashMap<String, String>()
     var i = 0
@@ -19,12 +34,8 @@ fun main(args: Array<String>) {
         }
         if (a.startsWith("--") && i + 1 < args.size) { opts[a.removePrefix("--")] = args[i + 1]; i += 2 } else i++
     }
-    val dir = File(opts["dir"] ?: (System.getProperty("user.home") + File.separator + "offgrid-hub")).apply { mkdirs() }
-    val keyFile = File(dir, "household.key")
-    val key = opts["key"]
-        ?: keyFile.takeIf { it.isFile }?.readText()?.trim()?.takeIf { it.isNotEmpty() }
-        ?: HubServer.newKey().also { keyFile.writeText(it) }
-    if (opts["key"] != null) keyFile.writeText(key)
+    val dir = (opts["dir"]?.let(::File) ?: defaultHubDir()).apply { mkdirs() }
+    val key = householdKey(dir, opts["key"])
 
     val hub = HubServer(HubStore(dir), key)
     val port = hub.start(opts["port"]?.toIntOrNull() ?: HubServer.DEFAULT_PORT)

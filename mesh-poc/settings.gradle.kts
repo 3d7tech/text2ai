@@ -14,4 +14,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "offgrid-mesh-poc"
-include(":core", ":app")
+include(":core", ":desktop", ":app")

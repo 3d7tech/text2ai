@@ -57,11 +57,12 @@ an Android device (ideally a plugged-in tablet) running the app with **Hub → R
 - Bridging: browser text is re-broadcast on the mesh under the sender's name (media becomes a short note);
   public mesh messages appear in the browsers, marked "via mesh".
 
-**Chromebook (or any computer) as the hub:** Chromebooks can't install the APK, so the hub also ships as a
-single file, `offgrid-hub.jar`, built in CI and published on the download page. In the Chromebook's Linux terminal:
-`sudo apt install -y default-jre-headless && java -jar offgrid-hub.jar`, then forward port 8090
-(Settings → Developers → Linux → Port forwarding). The chat's **Invite** button shows a QR code for other devices.
-A Chromebook hub isn't on the radio mesh (no bridge to Android phones). The household key is kept in `~/offgrid-hub/household.key`.
+**Mac (or any computer) as the hub:** `desktop/` is a small window app (Swing) around the same hub. It shows
+a big QR code to scan, the address, "Open Family Chat" and "Copy link", and keeps a Mac awake (`caffeinate`).
+CI packages it on macOS runners with `jpackage` (Java bundled, ad-hoc signed) as `FamilyChatHub-mac-apple.dmg`
+and `FamilyChatHub-mac-intel.dmg`; the same code ships as `offgrid-hub.jar` for Windows/Linux (`--nogui` for text mode).
+It isn't notarized yet (that needs an Apple Developer ID), so macOS asks for **Open Anyway** once.
+A computer hub isn't on the radio mesh (no bridge to Android phones). Data: `~/Library/Application Support/Family Chat Hub` on a Mac, `~/offgrid-hub` elsewhere.
 
 Code: `core/.../hub/` (HTTP server, store, routes; JVM-tested) and `core/src/main/resources/hub/index.html` (web app).
 Try it on a laptop: `gradle -p core runHubDemo -PhubArgs="--key demokey123"`, then open http://127.0.0.1:8090/?k=demokey123

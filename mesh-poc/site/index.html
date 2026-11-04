@@ -55,24 +55,29 @@
 
   <h2>iPhones, Chromebooks and tablets</h2>
   <div class="card"><ol>
-    <li>Pick a hub: an Android tablet or phone with the app (tap <strong>Hub</strong> and switch it on), or a Chromebook (see below). Keep it plugged in.</li>
+    <li>Pick a hub: an Android tablet or phone with the app (tap <strong>Hub</strong> and switch it on), or a Mac (see below). Keep it plugged in.</li>
     <li>On each device, join the same Wi-Fi (no internet needed) and scan the QR code shown on the hub.</li>
     <li><strong>iPhone:</strong> in Safari, Share → <em>Add to Home Screen</em>. <strong>Chromebook:</strong> Chrome ⋮ → Cast, save and share → <em>Create shortcut</em> → Open as window.</li>
     <li>Chat, and send photos and videos. Everything stays on your home network.</li>
   </ol></div>
 
-  <h2>Use a Chromebook as the hub</h2>
+  <h2>Use a Mac as the hub</h2>
   <div class="card">
-    <p style="margin:0 0 8px">Chromebooks can't install the Android app file, but they can run the hub in their built-in Linux. This one-time setup needs internet.</p>
+    <p style="margin:0 0 10px">A Mac app: download it, double-click, and scan the code it shows. No Terminal, nothing else to install.</p>
+    <a class="btn" href="FamilyChatHub-mac-apple.dmg" download>Download for Mac (Apple chip: M1 and newer)</a>
+    <p class="meta" style="margin:8px 0 14px"><a href="FamilyChatHub-mac-intel.dmg" download>Mac with Intel processor</a> · Not sure? Apple menu → About This Mac → look for "Chip" (Apple) or "Processor" (Intel)</p>
     <ol>
-      <li>Settings → About ChromeOS → Developers → <strong>Linux development environment</strong> → Turn on. School or work Chromebooks may block this.</li>
-      <li>Open the <strong>Terminal</strong> app, paste this line, and press Enter:
-        <pre class="cmd">sudo apt update &amp;&amp; sudo apt install -y default-jre-headless &amp;&amp; curl -LO https://3d7tech.github.io/text2ai/offgrid-hub.jar &amp;&amp; java -jar offgrid-hub.jar</pre></li>
-      <li>Settings → About ChromeOS → Developers → Linux → <strong>Port forwarding</strong> → Add <code>8090</code> (TCP) and switch it on.</li>
-      <li>In Chrome, open the full <code>http://localhost:8090/?k=…</code> link the Terminal shows, then tap <strong>Invite</strong>. Type the Chromebook's Wi-Fi address from Settings → Network → Wi-Fi → your network, and scan the QR code on each device.</li>
-      <li>Next time, open Terminal and run <code>java -jar offgrid-hub.jar</code>. Keep the Chromebook plugged in with the Terminal open. In Power settings, turn off sleep when the lid is closed.</li>
+      <li>Open the downloaded file and drag <strong>Family Chat Hub</strong> into <strong>Applications</strong>.</li>
+      <li>Double-click it. The first time, macOS says it can't verify the app. Click <strong>Done</strong>, then open <strong>System Settings → Privacy &amp; Security</strong>, scroll down, and click <strong>Open Anyway</strong>. You only do this once.</li>
+      <li>If asked whether to allow incoming connections, click <strong>Allow</strong>.</li>
+      <li>A window shows a QR code. On each iPhone, Chromebook and tablet, join the same Wi-Fi and scan it.</li>
+      <li>Keep the Mac plugged in with the lid open and the window open.</li>
     </ol>
-    <p style="margin:8px 0 0"><a href="offgrid-hub.jar">Download the hub file (offgrid-hub.jar)</a> · works on any computer with Java 17+</p>
+  </div>
+
+  <h2>Other computers</h2>
+  <div class="card">
+    <p style="margin:0">Windows or Linux with Java 17+: <a href="offgrid-hub.jar">download offgrid-hub.jar</a> and double-click it (or run <code>java -jar offgrid-hub.jar</code>). The same window and QR code appear. Chromebooks can't host the hub unless Linux is turned on, but they join as chat devices.</p>
   </div>
 
   <h2>Pass it on, no internet needed</h2>
