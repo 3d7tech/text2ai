@@ -42,11 +42,13 @@ class MainActivity : Activity(), MeshNode.Listener {
         val pad = (12 * resources.displayMetrics.density).toInt()
 
         status = TextView(this).apply { setPadding(pad, pad, pad / 2, pad / 2) }
-        val shareButton = Button(this).apply { text = "Share app"; setOnClickListener { showShareOptions() } }
+        val hubButton = Button(this).apply { text = "Hub"; setOnClickListener { startActivity(Intent(this@MainActivity, HubActivity::class.java)) } }
+        val shareButton = Button(this).apply { text = "Share"; setOnClickListener { showShareOptions() } }
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(0, 0, pad, 0)
             addView(status, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            addView(hubButton)
             addView(shareButton)
         }
         adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, mutableListOf())
@@ -193,7 +195,7 @@ class MainActivity : Activity(), MeshNode.Listener {
     }
 
     private fun format(m: ChatMessage): String {
-        val who = if (m.outgoing) "me" else m.nick
+        val who = if (m.outgoing && m.nick == node.nickname) "me" else m.nick
         val dm = if (m.isDirect) " [DM]" else ""
         val hops = if (m.outgoing) "" else " · ${m.hops + 1} hop${if (m.hops == 0) "" else "s"}"
         return "${time.format(Date(m.timestamp))}  $who$dm: ${m.text}$hops"

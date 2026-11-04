@@ -82,15 +82,21 @@ class MeshNode(
         publishNeighbors()
     }
 
-    fun sendBroadcast(text: String): ChatMessage = originate(NodeId.BROADCAST, text)
+    /**
+     * @param asNick display name to send under (a household hub relays browser users' messages
+     *   under their own names); defaults to this node's nickname.
+     * @param packetId lets a caller know the id before listeners fire (used to avoid echo loops).
+     */
+    fun sendBroadcast(text: String, asNick: String = nickname, packetId: PacketId = PacketId.random()): ChatMessage =
+        originate(NodeId.BROADCAST, text, asNick, packetId)
 
-    fun sendDirect(to: NodeId, text: String): ChatMessage = originate(to, text)
+    fun sendDirect(to: NodeId, text: String): ChatMessage = originate(to, text, nickname, PacketId.random())
 
-    private fun originate(dst: NodeId, text: String): ChatMessage {
-        val nick = nickname
+    private fun originate(dst: NodeId, text: String, asNick: String, packetId: PacketId): ChatMessage {
+        val nick = asNick.take(ChatPayload.MAX_NICK_CHARS)
         val payload = ChatPayload(nick, text).encode()
         require(payload.size <= Packet.MAX_PAYLOAD) { "message too long" }
-        val p = Packet(Packet.TYPE_CHAT, config.defaultTtl, 0, PacketId.random(), id, dst, clock(), payload)
+        val p = Packet(Packet.TYPE_CHAT, config.defaultTtl, 0, packetId, id, dst, clock(), payload)
         val msg = ChatMessage(p.id, id, nick, dst, text, p.timestamp, 0, outgoing = true)
         executor.execute {
             markSeen(p.id)
