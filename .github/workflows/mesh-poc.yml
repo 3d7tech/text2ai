@@ -67,6 +67,7 @@ jobs:
 
   mac-app:
     # Family Chat Hub.app in a .dmg, Java bundled: double-click, no Terminal.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -123,7 +124,8 @@ jobs:
           path: mesh-poc/build-mac/FamilyChatHub-mac-${{ matrix.arch }}.dmg
 
   site:
-    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    # Publish whenever the main build passed, even if a Mac build was slow, failed or cancelled.
+    if: always() && needs.build.result == 'success' && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
     needs: [build, mac-app]
     runs-on: ubuntu-latest
     steps:
@@ -143,7 +145,7 @@ jobs:
           path: _site
 
   deploy-pages:
-    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    if: always() && needs.site.result == 'success'
     needs: site
     runs-on: ubuntu-latest
     permissions:
