@@ -19,7 +19,7 @@ import java.security.SecureRandom
  * GET  /api/history?after=N      JSON array of messages
  * GET  /api/qr.svg?text=…        QR code (used by the Invite screen)
  * POST /api/send                 form: name, cid, text, media, mediaType
- * POST /api/upload               raw body, Content-Type image/(any) or video/(any)
+ * POST /api/upload               raw body, Content-Type image/, video/ or audio/ (any subtype)
  * GET  /media/{id}               file, with Range support (needed for iOS video)
  * ```
  */
@@ -33,6 +33,12 @@ class HubServer(
 
     companion object {
         const val DEFAULT_PORT = 8090
+
+        /** Third-party files the web app loads from the hub, so they work without internet. */
+        private val VENDOR = mapOf(
+            "/vendor/mediabunny-1.62.0.min.mjs" to "text/javascript; charset=utf-8",
+            "/vendor/MEDIABUNNY-LICENSE.txt" to "text/plain; charset=utf-8",
+        )
         private val rng = SecureRandom()
 
         fun newKey(): String {
@@ -61,6 +67,7 @@ class HubServer(
             get && (p == "/" || p == "/index.html") -> res.send(200, "text/html; charset=utf-8", page(req), mapOf("Cache-Control" to "no-cache"), head)
             get && (p == "/apple-touch-icon.png" || p == "/icon-192.png" || p == "/icon-512.png") ->
                 res.send(200, "image/png", asset(p.removePrefix("/")), mapOf("Cache-Control" to "max-age=86400"), head)
+            get && p in VENDOR -> res.send(200, VENDOR.getValue(p), asset(p.removePrefix("/")), mapOf("Cache-Control" to "max-age=31536000, immutable"), head)
             get && p == "/manifest.webmanifest" -> res.send(200, "application/manifest+json", manifest(req).toByteArray(), head = head)
             p.startsWith("/api/") || p.startsWith("/media/") -> {
                 if (!authorized(req)) return res.json(401, """{"error":"household key required"}""")
@@ -160,7 +167,9 @@ class HubServer(
         if (length == 0L) throw HttpError(400, "empty file")
         if (length > store.maxMediaBytes) throw HttpError(413, "File too large (max ${store.maxMediaBytes / 1_048_576} MB)")
         val type = req.header("content-type")?.substringBefore(';')?.trim()?.lowercase().orEmpty()
-        if (!(type.startsWith("image/") || type.startsWith("video/"))) throw HttpError(415, "Only photos and videos")
+        if (!(type.startsWith("image/") || type.startsWith("video/") || type.startsWith("audio/"))) {
+            throw HttpError(415, "Only photos, videos and voice notes")
+        }
         val id = store.saveMedia(req.body, length, type)
         res.json(200, """{"id":"$id","type":${jsonString(type)}}""")
     }

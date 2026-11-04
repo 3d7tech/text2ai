@@ -152,6 +152,21 @@ class HubServerTest {
         assertEquals(416, conn("/media/$id").apply { setRequestProperty("Range", "bytes=999999-") }.responseCode)
     }
 
+    @Test fun `voice notes upload and the media library is served from the hub`() {
+        hub.start(0)
+        val up = upload(Random(4).nextBytes(20_000), "audio/mp4")
+        assertEquals(200, up.responseCode)
+        val id = idOf(up.inputStream.readBytes().decodeToString())
+        assertEquals(200, send("Ada", "", media = id))
+        assertTrue("\"mediaType\":\"audio/mp4\"" in conn("/api/history").inputStream.readBytes().decodeToString())
+        val lib = conn("/vendor/mediabunny-1.62.0.min.mjs", key = false)
+        assertEquals(200, lib.responseCode)
+        assertTrue(lib.contentType.startsWith("text/javascript"))
+        assertTrue(lib.inputStream.readBytes().size > 500_000)
+        assertEquals(200, conn("/vendor/MEDIABUNNY-LICENSE.txt", key = false).responseCode)
+        assertEquals(404, conn("/vendor/../index.html", key = false).responseCode)
+    }
+
     @Test fun `upload validation`() {
         hub.start(0)
         assertEquals(415, upload(byteArrayOf(1, 2, 3), "application/x-msdownload").responseCode)

@@ -49,6 +49,7 @@ class HubBridge(context: Context, private val node: MeshNode) : MeshNode.Listene
     private fun toMesh(m: HubMessage) {
         val note = when {
             m.mediaType?.startsWith("video/") == true -> "🎬 sent a video (open Family Chat to watch)"
+            m.mediaType?.startsWith("audio/") == true -> "🎤 sent a voice note (open Family Chat to listen)"
             m.mediaId != null -> "📷 sent a photo (open Family Chat to see it)"
             else -> null
         }

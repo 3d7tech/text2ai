@@ -64,6 +64,14 @@ and `FamilyChatHub-mac-intel.dmg`; the same code ships as `offgrid-hub.jar` for 
 It isn't notarized yet (that needs an Apple Developer ID), so macOS asks for **Open Anyway** once.
 A computer hub isn't on the radio mesh (no bridge to Android phones). Data: `~/Library/Application Support/Family Chat Hub` on a Mac, `~/offgrid-hub` elsewhere.
 
+**Voice notes and video (hub):** the 🎤 button records a voice note. On the hub computer (a secure `localhost` page) it
+records from the microphone; on iPhones over home Wi-Fi it opens the camera in video mode and keeps only the sound.
+Everything is compressed on the sending device with [Mediabunny](https://mediabunny.dev) 1.62.0 (MPL-2.0, served by the
+hub from `resources/hub/vendor/`, so it works offline):
+voice to ~24 kbps mono MP4 (~180 KB/min), video to ~360p / 24 fps / 400 kbps with a preview frame (max 3 min).
+Each result is checked for real sound (some Safari versions' AAC encoder could produce silent audio); if the check fails,
+the original sound track is copied instead. If a device can't compress a video, the original is sent.
+
 Code: `core/.../hub/` (HTTP server, store, routes; JVM-tested) and `core/src/main/resources/hub/index.html` (web app).
 Try it on a laptop: `gradle -p core runHubDemo -PhubArgs="--key demokey123"`, then open http://127.0.0.1:8090/?k=demokey123
 
