@@ -77,6 +77,13 @@
   .card p { color: var(--muted); }
   .card input { width: 100%; font: inherit; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--bubble); color: var(--fg); margin: 8px 0 12px; }
   .card button { width: 100%; padding: 12px; border: 0; border-radius: 12px; background: var(--accent); color: var(--accent-fg); font: inherit; font-weight: 600; }
+  .card label.small { display: block; font-size: .85rem; color: var(--muted); margin-top: 6px; }
+  .card .hint { font-size: .85rem; margin: 0 0 10px; }
+  #qrImg { display: block; width: min(260px, 70vw); height: auto; aspect-ratio: 1; margin: 6px auto 10px; border-radius: 10px; background: #fff; }
+  #qrImg:not([src]) { visibility: hidden; }
+  #inviteUrl { font: .85rem ui-monospace, Menlo, monospace; overflow-wrap: anywhere; text-align: center; margin-bottom: 12px; user-select: all; }
+  .card .secondary { background: none; color: var(--fg); border: 1px solid var(--line); margin-top: 8px; }
+  @media (max-width: 420px) { #status { font-size: 0; gap: 0; } header { gap: 8px; } }
   #toast { position: fixed; left: 16px; right: 16px; bottom: calc(80px + env(safe-area-inset-bottom)); text-align: center; pointer-events: none; }
   #toast span { display: inline-block; background: var(--fg); color: var(--bg); padding: 8px 14px; border-radius: 10px; font-size: .9rem; }
   #toast:empty { display: none; }
@@ -86,6 +93,7 @@
 <header>
   <h1>Family Chat</h1>
   <div id="status">Connecting…</div>
+  <button id="inviteBtn" type="button">Invite</button>
   <button id="rename" type="button">Name</button>
 </header>
 <main id="list" aria-live="polite"><div id="empty">No messages yet. Say hello 👋</div></main>
@@ -105,6 +113,19 @@
   <div class="card">
     <h2>Join your household</h2>
     <p>Open this page by scanning the QR code on the hub tablet (Offgrid Mesh → Household hub). That code contains your household key.</p>
+  </div>
+</div>
+<div class="overlay" id="invite" hidden>
+  <div class="card">
+    <h2>Invite a device</h2>
+    <p>Join the same Wi-Fi, then scan this code with the camera (iPhone: Camera app; Android: Camera or Google Lens).</p>
+    <label class="small" for="hostInput">This hub's Wi-Fi address</label>
+    <input id="hostInput" inputmode="decimal" placeholder="e.g. 192.168.1.20" autocomplete="off">
+    <p class="hint" id="hostHint">On a Chromebook hub: Settings → Network → Wi-Fi → your network → IP address.</p>
+    <img id="qrImg" alt="QR code for joining Family Chat">
+    <div id="inviteUrl"></div>
+    <button type="button" id="copyInvite">Copy link</button>
+    <button type="button" class="secondary" id="closeInvite">Done</button>
   </div>
 </div>
 <div class="overlay" id="namer" hidden>
@@ -166,6 +187,38 @@
     $('namer').hidden = true;
   });
   $('rename').addEventListener('click', askName);
+
+  // --- invite: a QR code other devices can scan (the hub draws it, so this works offline)
+  const isLan = (h) => /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(h);
+  function inviteUrl() {
+    let h = $('hostInput').value.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+    if (!h) return '';
+    if (!h.includes(':')) h += ':' + (location.port || '80');
+    return 'http://' + h + '/?k=' + encodeURIComponent(key);
+  }
+  function updateInvite() {
+    const url = inviteUrl();
+    const img = $('qrImg');
+    if (!url) { img.removeAttribute('src'); $('inviteUrl').textContent = 'Type the address above to show the code.'; return; }
+    store.set('hubHost', $('hostInput').value.trim());
+    img.src = '/api/qr.svg?' + K + '&text=' + encodeURIComponent(url);
+    $('inviteUrl').textContent = url;
+  }
+  $('inviteBtn').addEventListener('click', () => {
+    const here = isLan(location.hostname);
+    $('hostInput').value = here ? location.host : (store.get('hubHost') || '');
+    $('hostHint').hidden = here;
+    $('invite').hidden = false;
+    updateInvite();
+  });
+  let inviteTimer;
+  $('hostInput').addEventListener('input', () => { clearTimeout(inviteTimer); inviteTimer = setTimeout(updateInvite, 300); });
+  $('closeInvite').addEventListener('click', () => { $('invite').hidden = true; });
+  $('copyInvite').addEventListener('click', async () => {
+    const url = inviteUrl(); if (!url) return;
+    try { await navigator.clipboard.writeText(url); toast('Link copied'); }
+    catch { const r = document.createRange(); r.selectNodeContents($('inviteUrl')); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); toast('Select and copy the link'); }
+  });
 
   // --- rendering
   const fmtTime = (ts) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
