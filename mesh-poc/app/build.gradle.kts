@@ -17,6 +17,21 @@ android {
         versionName = "0.1"
     }
 
+    // Shared debug key (committed on purpose, PoC only) so CI builds install as updates
+    // over each other on test phones. Never use this key for a release build.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
+    lint {
+        abortOnError = false
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

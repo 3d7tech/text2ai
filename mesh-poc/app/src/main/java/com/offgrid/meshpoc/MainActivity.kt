@@ -133,9 +133,17 @@ class MainActivity : Activity(), MeshNode.Listener {
                 val parts = text.removePrefix("/dm ").split(" ", limit = 2)
                 val target = node.peers.entries.firstOrNull { it.value.equals(parts[0], ignoreCase = true) }?.key
                 if (target == null || parts.size < 2) adapter.add("— unknown peer '${parts[0]}' (try /peers)")
-                else node.sendDirect(target, parts[1])
+                else trySend { node.sendDirect(target, parts[1]) }
             }
-            else -> node.sendBroadcast(text)
+            else -> trySend { node.sendBroadcast(text) }
+        }
+    }
+
+    private fun trySend(block: () -> Unit) {
+        try {
+            block()
+        } catch (e: IllegalArgumentException) {
+            adapter.add("— not sent: ${e.message}")
         }
     }
 

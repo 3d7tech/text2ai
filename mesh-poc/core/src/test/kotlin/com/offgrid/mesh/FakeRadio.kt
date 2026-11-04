@@ -16,7 +16,12 @@ class QueueExecutor : Executor {
 }
 
 /** In-memory radio. [link] / [unlink] model two devices coming in and out of range. */
-class FakeTransport(val label: String, private val mtu: Int = 40) : Transport {
+class FakeTransport(
+    val label: String,
+    private val mtu: Int = 40,
+    private val dropRate: Double = 0.0,
+    private val rng: kotlin.random.Random = kotlin.random.Random(0),
+) : Transport {
     override val name = "fake"
     private lateinit var listener: TransportListener
     private val peers = mutableMapOf<String, FakeTransport>()
@@ -29,6 +34,7 @@ class FakeTransport(val label: String, private val mtu: Int = 40) : Transport {
     override fun send(link: String, frame: ByteArray): Boolean {
         val p = peers[link] ?: return false
         framesSent++
+        if (dropRate > 0 && rng.nextDouble() < dropRate) return true // lost in the air
         p.listener.onFrame(p, label, frame)
         return true
     }
@@ -41,6 +47,12 @@ class FakeTransport(val label: String, private val mtu: Int = 40) : Transport {
             b.listener.onNeighborUp(b, a.label)
         }
 
+        /** Radio contact lost without either side being told (e.g. walked out of range). */
+        fun silentlyUnlink(a: FakeTransport, b: FakeTransport) {
+            a.peers.remove(b.label)
+            b.peers.remove(a.label)
+        }
+
         fun unlink(a: FakeTransport, b: FakeTransport) {
             a.peers.remove(b.label)
             b.peers.remove(a.label)
@@ -50,9 +62,14 @@ class FakeTransport(val label: String, private val mtu: Int = 40) : Transport {
     }
 }
 
-class TestNode(val name: String, exec: QueueExecutor, config: MeshNode.Config = MeshNode.Config()) {
-    val radio = FakeTransport(name)
-    val node = MeshNode(NodeId.random(), name, exec, config = config)
+class TestNode(
+    val name: String,
+    exec: QueueExecutor,
+    config: MeshNode.Config = MeshNode.Config(),
+    clock: () -> Long = System::currentTimeMillis,
+    val radio: FakeTransport = FakeTransport(name),
+) {
+    val node = MeshNode(NodeId.random(), name, exec, clock, config)
     val inbox = mutableListOf<ChatMessage>()
 
     init {
