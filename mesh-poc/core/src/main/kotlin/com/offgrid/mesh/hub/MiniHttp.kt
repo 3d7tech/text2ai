@@ -20,6 +20,7 @@ class HttpRequest(
     val query: Map<String, String>,
     val headers: Map<String, String>,
     val body: InputStream,
+    val version: String = "HTTP/1.1",
 ) {
     fun header(name: String): String? = headers[name.lowercase()]
     val contentLength: Long get() = header("content-length")?.toLongOrNull() ?: -1
@@ -35,9 +36,16 @@ class HttpRequest(
 
 class HttpError(val code: Int, message: String) : Exception(message)
 
-/** Writes one response. Every response closes the connection (simple, and fine on a LAN). */
-class HttpResponse(private val out: OutputStream) {
+/**
+ * Writes one response. Responses with a known length keep the connection open for the next
+ * request (browsers then reuse it instead of reconnecting for every photo); streams close it.
+ */
+class HttpResponse(private val out: OutputStream, keepAlive: Boolean = false) {
     var committed = false
+        private set
+
+    /** True when the connection must close after this response. */
+    var closeAfter = !keepAlive
         private set
 
     fun send(code: Int, type: String, body: ByteArray, headers: Map<String, String> = emptyMap(), head: Boolean = false) {
@@ -54,9 +62,10 @@ class HttpResponse(private val out: OutputStream) {
     fun start(code: Int, type: String, length: Long?, headers: Map<String, String> = emptyMap()): OutputStream {
         check(!committed) { "response already started" }
         committed = true
+        if (length == null) closeAfter = true
         val sb = StringBuilder("HTTP/1.1 $code ${reason(code)}\r\n")
             .append("Content-Type: $type\r\n")
-            .append("Connection: close\r\n")
+            .append(if (closeAfter) "Connection: close\r\n" else "Connection: keep-alive\r\nKeep-Alive: timeout=15\r\n")
             .append("X-Content-Type-Options: nosniff\r\n")
         if (length != null) sb.append("Content-Length: $length\r\n")
         headers.forEach { (k, v) -> sb.append(k).append(": ").append(v).append("\r\n") }
@@ -117,13 +126,22 @@ abstract class MiniHttpServer(private val threadName: String) {
                 sock.tcpNoDelay = true
                 val input = BufferedInputStream(sock.getInputStream(), 64 * 1024)
                 val out = BufferedOutputStream(sock.getOutputStream(), 64 * 1024)
-                val res = HttpResponse(out)
-                val req = parse(input)
-                if (req == null) {
-                    res.text(400, "Bad request")
-                } else {
+                var served = 0
+                while (!Thread.currentThread().isInterrupted) {
+                    val req = parse(input)
+                    if (req == null) {
+                        if (served == 0) HttpResponse(out).text(400, "Bad request")
+                        out.flush()
+                        break
+                    }
+                    val chunked = req.header("transfer-encoding") != null
+                    val body = BoundedInputStream(req.body, if (chunked) 0 else maxOf(0, req.contentLength))
+                    val bounded = HttpRequest(req.method, req.path, req.query, req.headers, body, req.version)
+                    val wantsKeepAlive = !chunked && served < 200 &&
+                        req.version == "HTTP/1.1" && req.header("connection")?.lowercase() != "close"
+                    val res = HttpResponse(out, wantsKeepAlive)
                     try {
-                        handle(req, res)
+                        handle(bounded, res)
                     } catch (e: HttpError) {
                         if (!res.committed) res.text(e.code, e.message ?: "Error")
                     } catch (e: IOException) {
@@ -133,10 +151,13 @@ abstract class MiniHttpServer(private val threadName: String) {
                     } catch (e: Exception) {
                         if (!res.committed) res.text(500, "Internal error")
                     }
+                    out.flush()
+                    if (!res.committed || res.closeAfter || !body.drain(256 * 1024)) break
+                    served++
+                    sock.soTimeout = 15_000 // idle time allowed before the next request
                 }
-                out.flush()
             } catch (_: IOException) {
-                // client went away
+                // client went away, or the idle connection timed out
             }
         }
     }
@@ -153,7 +174,7 @@ abstract class MiniHttpServer(private val threadName: String) {
                 val path = target.substringBefore('?')
                 val q = if ('?' in target) parseUrlEncoded(target.substringAfter('?')) else emptyMap()
                 val decodedPath = runCatching { URLDecoder.decode(path.replace("+", "%2B"), "UTF-8") }.getOrNull() ?: return null
-                return HttpRequest(parts[0].uppercase(), decodedPath, q, headers, input)
+                return HttpRequest(parts[0].uppercase(), decodedPath, q, headers, input, parts.getOrNull(2) ?: "HTTP/1.0")
             }
             val i = h.indexOf(':')
             if (i > 0) headers[h.substring(0, i).trim().lowercase()] = h.substring(i + 1).trim()
@@ -170,6 +191,35 @@ abstract class MiniHttpServer(private val threadName: String) {
             if (buf.length >= 16 * 1024) return null
             buf.append(b.toChar())
         }
+    }
+}
+
+/** Limits a handler to the request's own body, so the next request on the connection stays intact. */
+private class BoundedInputStream(private val inner: InputStream, private var left: Long) : InputStream() {
+    override fun read(): Int {
+        if (left <= 0) return -1
+        val b = inner.read()
+        if (b >= 0) left--
+        return b
+    }
+
+    override fun read(b: ByteArray, off: Int, len: Int): Int {
+        if (left <= 0) return -1
+        val n = inner.read(b, off, minOf(len.toLong(), left).toInt())
+        if (n > 0) left -= n
+        return n
+    }
+
+    override fun available(): Int = minOf(inner.available().toLong(), left).toInt()
+
+    override fun close() {}
+
+    /** Skips any unread body. Returns false if too much is left (then the connection closes). */
+    fun drain(max: Long): Boolean {
+        if (left > max) return false
+        val buf = ByteArray(8192)
+        while (left > 0) if (read(buf, 0, buf.size) < 0) return false
+        return true
     }
 }
 

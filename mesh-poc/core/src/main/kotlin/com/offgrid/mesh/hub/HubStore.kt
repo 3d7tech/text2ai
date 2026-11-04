@@ -18,11 +18,13 @@ data class HubMessage(
     /** "web" (browser on the household Wi-Fi) or "mesh" (Bluetooth / Wi-Fi Aware phones). */
     val origin: String,
     val clientId: String,
+    /** Small preview of a photo, shown in the chat list (the full photo opens on tap). */
+    val thumbId: String? = null,
 ) {
     fun toJson(): String =
         """{"seq":$seq,"ts":$ts,"from":${jsonString(from)},"text":${jsonString(text)},""" +
             """"media":${jsonString(mediaId)},"mediaType":${jsonString(mediaType)},""" +
-            """"origin":${jsonString(origin)},"cid":${jsonString(clientId)}}"""
+            """"origin":${jsonString(origin)},"cid":${jsonString(clientId)},"thumb":${jsonString(thumbId)}}"""
 }
 
 /**
@@ -60,14 +62,23 @@ class HubStore(
 
     val latestSeq: Long get() = synchronized(lock) { messages.lastOrNull()?.seq ?: 0 }
 
-    fun add(from: String, text: String, mediaId: String?, mediaType: String?, origin: String, clientId: String): HubMessage {
+    fun add(
+        from: String,
+        text: String,
+        mediaId: String?,
+        mediaType: String?,
+        origin: String,
+        clientId: String,
+        thumbId: String? = null,
+    ): HubMessage {
         val name = from.trim().take(MAX_NAME).ifEmpty { "Someone" }
         val body = text.take(MAX_TEXT)
         require(body.isNotBlank() || mediaId != null) { "empty message" }
         require(mediaId == null || media(mediaId) != null) { "unknown media" }
+        require(thumbId == null || media(thumbId) != null) { "unknown thumbnail" }
         val m: HubMessage
         synchronized(lock) {
-            m = HubMessage((messages.lastOrNull()?.seq ?: 0) + 1, clock(), name, body, mediaId, mediaType, origin, clientId.take(64))
+            m = HubMessage((messages.lastOrNull()?.seq ?: 0) + 1, clock(), name, body, mediaId, mediaType, origin, clientId.take(64), thumbId)
             messages += m
             log.appendText(encode(m) + "\n")
             lock.notifyAll()
@@ -137,12 +148,15 @@ class HubStore(
     private fun dec(s: String) = if (s == "-") null else URLDecoder.decode(s, "UTF-8")
 
     private fun encode(m: HubMessage) =
-        listOf(m.seq.toString(), m.ts.toString(), enc(m.from), enc(m.text), enc(m.mediaId), enc(m.mediaType), enc(m.origin), enc(m.clientId))
+        listOf(m.seq.toString(), m.ts.toString(), enc(m.from), enc(m.text), enc(m.mediaId), enc(m.mediaType), enc(m.origin), enc(m.clientId), enc(m.thumbId))
             .joinToString("\t")
 
     private fun decode(line: String): HubMessage? = runCatching {
         val p = line.split('\t')
-        if (p.size != 8) return null
-        HubMessage(p[0].toLong(), p[1].toLong(), dec(p[2])!!, dec(p[3]) ?: "", dec(p[4]), dec(p[5]), dec(p[6]) ?: "web", dec(p[7]) ?: "")
+        if (p.size != 8 && p.size != 9) return null // 8 fields = logs written before thumbnails
+        HubMessage(
+            p[0].toLong(), p[1].toLong(), dec(p[2])!!, dec(p[3]) ?: "", dec(p[4]), dec(p[5]), dec(p[6]) ?: "web", dec(p[7]) ?: "",
+            p.getOrNull(8)?.let(::dec),
+        )
     }.getOrNull()
 }

@@ -65,12 +65,19 @@ fun main(args: Array<String>) {
     SwingUtilities.invokeLater { HubWindow(hub, key, port, dir).show() }
 }
 
-/** macOS: stop the Mac sleeping while the hub runs (the lid must stay open). */
+/**
+ * macOS: stop the Mac sleeping while the hub runs (the lid must stay open), and turn off
+ * App Nap, which otherwise slows a background app's network replies by seconds.
+ */
 private fun keepAwake() {
     val mac = System.getProperty("os.name").orEmpty().lowercase().contains("mac")
     if (!mac) return
     runCatching {
         ProcessBuilder("caffeinate", "-i", "-w", ProcessHandle.current().pid().toString())
+            .redirectErrorStream(true).start()
+    }
+    runCatching {
+        ProcessBuilder("defaults", "write", "com.offgrid.familychathub", "NSAppSleepDisabled", "-bool", "YES")
             .redirectErrorStream(true).start()
     }
 }

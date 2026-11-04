@@ -27,6 +27,8 @@ class HubServer(
     private val store: HubStore,
     val key: String,
     private val appName: String = "Family Chat",
+    /** How often an idle event stream sends a heartbeat. */
+    private val heartbeatMs: Long = 15_000,
 ) : MiniHttpServer("hub") {
 
     companion object {
@@ -56,8 +58,7 @@ class HubServer(
         val head = req.method == "HEAD"
         val p = req.path
         when {
-            get && (p == "/" || p == "/index.html") ->
-                res.send(200, "text/html; charset=utf-8", asset("index.html"), mapOf("Cache-Control" to "no-cache"), head)
+            get && (p == "/" || p == "/index.html") -> res.send(200, "text/html; charset=utf-8", page(req), mapOf("Cache-Control" to "no-cache"), head)
             get && (p == "/apple-touch-icon.png" || p == "/icon-192.png" || p == "/icon-512.png") ->
                 res.send(200, "image/png", asset(p.removePrefix("/")), mapOf("Cache-Control" to "max-age=86400"), head)
             get && p == "/manifest.webmanifest" -> res.send(200, "application/manifest+json", manifest(req).toByteArray(), head = head)
@@ -79,6 +80,20 @@ class HubServer(
             }
             else -> res.text(404, "Not found")
         }
+    }
+
+    /**
+     * The web app, with the household key already in its manifest link when the visitor has it.
+     * iOS reads the manifest before any script runs, so "Add to Home Screen" must find the key there;
+     * the home-screen app has its own storage and would otherwise open without it.
+     */
+    private fun page(req: HttpRequest): ByteArray {
+        val html = asset("index.html").decodeToString()
+        if (!authorized(req)) return html.toByteArray()
+        return html.replace(
+            """href="/manifest.webmanifest"""",
+            """href="/manifest.webmanifest?k=$key"""",
+        ).toByteArray()
     }
 
     private fun manifest(req: HttpRequest): String {
@@ -107,9 +122,10 @@ class HubServer(
         out.flush()
         try {
             while (!Thread.currentThread().isInterrupted) {
-                val batch = store.awaitAfter(last, 15_000)
+                val batch = store.awaitAfter(last, heartbeatMs)
                 val sb = StringBuilder()
-                if (batch.isEmpty()) sb.append(": ping\n\n")
+                // A named heartbeat the app can see, so it notices a dead connection and reconnects.
+                if (batch.isEmpty()) sb.append("event: ping\ndata: {}\n\n")
                 for (m in batch) {
                     sb.append("id: ").append(m.seq).append("\ndata: ").append(m.toJson()).append("\n\n")
                     last = m.seq
@@ -131,7 +147,9 @@ class HubServer(
         if (mediaId != null && mediaType == null) throw HttpError(400, "unknown media")
         val text = f["text"].orEmpty()
         if (text.isBlank() && mediaId == null) throw HttpError(400, "empty message")
-        val m = store.add(f["name"].orEmpty(), text, mediaId, mediaType, "web", f["cid"].orEmpty())
+        val thumbId = f["thumb"]?.takeIf { it.isNotEmpty() }
+        if (thumbId != null && store.media(thumbId)?.second?.startsWith("image/") != true) throw HttpError(400, "unknown thumbnail")
+        val m = store.add(f["name"].orEmpty(), text, mediaId, mediaType, "web", f["cid"].orEmpty(), thumbId)
         runCatching { onWebMessage?.invoke(m) }
         res.json(200, """{"seq":${m.seq}}""")
     }

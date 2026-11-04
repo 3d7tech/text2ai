@@ -71,6 +71,16 @@ class HubServerTest {
         assertTrue("testkey123" !in anon, "key must not leak without the key")
     }
 
+    @Test fun `page carries the key in its manifest link so Add to Home Screen keeps it`() {
+        hub.start(0)
+        val withKey = conn("/").inputStream.readBytes().decodeToString()
+        assertTrue("href=\"/manifest.webmanifest?k=testkey123\"" in withKey)
+        val without = conn("/", key = false).inputStream.readBytes().decodeToString()
+        assertTrue("href=\"/manifest.webmanifest\"" in without && "testkey123" !in without)
+        val wrong = conn("/?k=nope", key = false).inputStream.readBytes().decodeToString()
+        assertTrue("testkey123" !in wrong)
+    }
+
     @Test fun `api requires the household key`() {
         hub.start(0)
         assertEquals(401, conn("/api/history", key = false).responseCode)
@@ -193,6 +203,69 @@ class HubServerTest {
         assertEquals("image/svg+xml", c.contentType)
         val svg = c.inputStream.readBytes().decodeToString()
         assertTrue(svg.startsWith("<svg") && svg.contains("h1v1h-1z"))
+    }
+
+    @Test fun `connections are reused between requests`() {
+        hub.start(0)
+        java.net.Socket("127.0.0.1", hub.port).use { sock ->
+            sock.soTimeout = 5000
+            val out = sock.getOutputStream()
+            val inp = java.io.BufferedInputStream(sock.getInputStream())
+            fun readResponse(): Pair<String, String> {
+                val head = StringBuilder()
+                while (!head.endsWith("\r\n\r\n")) head.append(inp.read().toChar())
+                val len = Regex("Content-Length: (\\d+)").find(head)!!.groupValues[1].toInt()
+                return head.toString() to String(inp.readNBytesCompat(len))
+            }
+            val form = "name=A&cid=c&text=hello"
+            out.write(("POST /api/send?k=testkey123 HTTP/1.1\r\nHost: x\r\nContent-Type: application/x-www-form-urlencoded\r\n" +
+                "Content-Length: ${form.length}\r\n\r\n$form").toByteArray())
+            val (h1, b1) = readResponse()
+            assertTrue("keep-alive" in h1, h1); assertTrue("\"seq\":1" in b1)
+            out.write("GET /api/history?k=testkey123 HTTP/1.1\r\nHost: x\r\n\r\n".toByteArray())
+            val (_, b2) = readResponse()
+            assertTrue("hello" in b2)
+            // an unauthorised POST whose body is never read must not corrupt the next request
+            out.write("POST /api/send HTTP/1.1\r\nHost: x\r\nContent-Length: 5\r\n\r\nabcde".toByteArray())
+            val (h3, _) = readResponse()
+            assertTrue(h3.startsWith("HTTP/1.1 401"), h3)
+            out.write("GET /icon-192.png HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n".toByteArray())
+            val (h4, _) = readResponse()
+            assertTrue(h4.startsWith("HTTP/1.1 200") && "Connection: close" in h4, h4)
+        }
+    }
+
+    @Test fun `photos carry a thumbnail and old logs still load`() {
+        hub.start(0)
+        val full = idOf(upload(Random(1).nextBytes(5000), "image/jpeg").inputStream.readBytes().decodeToString())
+        val thumb = idOf(upload(Random(2).nextBytes(500), "image/jpeg").inputStream.readBytes().decodeToString())
+        val c = conn("/api/send", "POST"); c.doOutput = true
+        c.outputStream.use { it.write("name=A&cid=c&text=&media=$full&thumb=$thumb".toByteArray()) }
+        assertEquals(200, c.responseCode)
+        assertTrue("\"thumb\":\"$thumb\"" in conn("/api/history").inputStream.readBytes().decodeToString())
+        val bad = conn("/api/send", "POST"); bad.doOutput = true
+        bad.outputStream.use { it.write("name=A&cid=c&text=x&media=$full&thumb=ffffffffffffffff".toByteArray()) }
+        assertEquals(400, bad.responseCode)
+        hub.stop()
+        // a log line written before thumbnails existed (8 fields)
+        File(dir, "messages.tsv").appendText("99\t1\tOld\thi\t-\t-\tweb\tc\n")
+        store = HubStore(dir); hub = HubServer(store, "testkey123"); hub.start(0)
+        val json = conn("/api/history").inputStream.readBytes().decodeToString()
+        assertTrue("\"from\":\"Old\"" in json && "\"thumb\":null" in json, json)
+    }
+
+    @Test fun `event stream sends a heartbeat the app can see`() {
+        hub.stop()
+        hub = HubServer(store, "testkey123", heartbeatMs = 200)
+        hub.start(0)
+        val c = conn("/api/events?after=0")
+        val r = BufferedReader(InputStreamReader(c.inputStream))
+        val start = System.currentTimeMillis()
+        var line: String
+        do { line = r.readLine() } while (line != "event: ping")
+        assertTrue(System.currentTimeMillis() - start < 3000)
+        assertEquals("data: {}", r.readLine())
+        c.disconnect()
     }
 
     @Test fun `range parsing edge cases`() {
