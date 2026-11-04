@@ -72,6 +72,13 @@ voice to ~24 kbps mono MP4 (~180 KB/min), video to ~360p / 24 fps / 400 kbps wit
 Each result is checked for real sound (some Safari versions' AAC encoder could produce silent audio); if the check fails,
 the original sound track is copied instead. If a device can't compress a video, the original is sent.
 
+**Rooms, delete and navigation (hub web app):** the app opens on a room list ("Everyone" plus any rooms people
+create, with unread counts and last-message previews). Rooms have a **‹ Rooms** back button, and the phone's back
+gesture/button works too (history entries per room). Senders can **delete a message for everyone** (⋯ on their own
+message): the hub removes its text and media from disk and every device shows "This message was deleted". A room's
+creator can delete the room for everyone. Only the "Everyone" room is bridged to the radio mesh, so other rooms stay
+on the hub. Identity is the per-device id the browser keeps, which is fine for a household but not real authentication.
+
 Code: `core/.../hub/` (HTTP server, store, routes; JVM-tested) and `core/src/main/resources/hub/index.html` (web app).
 Try it on a laptop: `gradle -p core runHubDemo -PhubArgs="--key demokey123"`, then open http://127.0.0.1:8090/?k=demokey123
 
