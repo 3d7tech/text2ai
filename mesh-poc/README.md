@@ -42,6 +42,20 @@ Chat commands: `/nick Amaka`, `/peers`, `/dm Amaka hello`.
 Try the data-mule demo: phone A sends a message while only B is near it. Walk B out of
 range of A and over to C, and C receives it.
 
+## Sharing the app without internet
+
+Tap **Share app** (top right). Pick whichever way the other phone can receive it:
+
+| Option | Receiver needs | How |
+|---|---|---|
+| Share sheet | Bluetooth, Quick Share, Xender, SHAREit, WhatsApp… | Sends `OffgridMesh.apk` |
+| Bluetooth as .zip | Bluetooth | For phones whose Bluetooth refuses `.apk`. The receiver opens the zip in Files and taps the APK |
+| Wi-Fi + QR code | Only a browser and camera | This phone starts a local-only hotspot and a tiny web server (`core/.../share/ApkWebServer.kt`). The other phone scans QR 1 to join and QR 2 to download |
+| Download link | Internet | Shares the GitHub Pages URL |
+
+The receiver must allow "install unknown apps" once. Because every build is signed with the same debug key,
+a shared copy installs over (or gets updated by) any other copy.
+
 ## How it works
 
 - **Packet** (46-byte header): version, type, ttl, hops, 128-bit random id, src, dst, timestamp, payload.
@@ -68,7 +82,8 @@ range of A and over to C, and C receives it.
 
 ## Verified so far
 
-- `core` unit tests (8): packet round-trip, out-of-order fragment reassembly, multi-hop relay,
+- `core` unit tests (30): sharing server (exact bytes, headers, 404/405, junk requests, parallel
+  downloads, port fallback), zip packaging, Wi-Fi QR escaping, plus mesh tests (8 original, 14 simulation/fuzz): packet round-trip, out-of-order fragment reassembly, multi-hop relay,
   no duplicates in a full mesh, TTL limit, DM privacy from relays (delivery only), data-mule store-and-forward,
   dual-radio de-duplication.
 - `app` sources type-check against the Android 15 framework classes.

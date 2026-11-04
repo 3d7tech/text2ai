@@ -2,6 +2,7 @@ package com.offgrid.meshpoc
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.content.Intent
@@ -15,6 +16,7 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ListView
 import android.widget.TextView
+import android.widget.Toast
 import com.offgrid.mesh.ChatMessage
 import com.offgrid.mesh.MeshNode
 import java.text.SimpleDateFormat
@@ -39,7 +41,14 @@ class MainActivity : Activity(), MeshNode.Listener {
         super.onCreate(savedInstanceState)
         val pad = (12 * resources.displayMetrics.density).toInt()
 
-        status = TextView(this).apply { setPadding(pad, pad, pad, pad / 2) }
+        status = TextView(this).apply { setPadding(pad, pad, pad / 2, pad / 2) }
+        val shareButton = Button(this).apply { text = "Share app"; setOnClickListener { showShareOptions() } }
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, 0, pad, 0)
+            addView(status, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            addView(shareButton)
+        }
         adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, mutableListOf())
         val list = ListView(this).apply {
             adapter = this@MainActivity.adapter
@@ -61,7 +70,7 @@ class MainActivity : Activity(), MeshNode.Listener {
         }
         setContentView(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            addView(status)
+            addView(header)
             addView(list, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
             addView(row)
         })
@@ -112,6 +121,32 @@ class MainActivity : Activity(), MeshNode.Listener {
         val bt = getSystemService(BluetoothManager::class.java)?.adapter
         if (bt != null && !bt.isEnabled) startActivity(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
         startForegroundService(Intent(this, MeshService::class.java))
+    }
+
+    // ---------------------------------------------------------------- sharing the app
+
+    private fun showShareOptions() {
+        val options = arrayOf(
+            "Bluetooth, Quick Share, Xender, SHAREit, WhatsApp…",
+            "Bluetooth as .zip (if Bluetooth refuses the app file)",
+            "Phone without the app: Wi-Fi + QR code (no internet)",
+            "Send the download link (needs internet)",
+        )
+        AlertDialog.Builder(this)
+            .setTitle("Share Offgrid Mesh")
+            .setItems(options) { _, which ->
+                try {
+                    when (which) {
+                        0 -> ApkShare.shareApk(this)
+                        1 -> ApkShare.shareZip(this)
+                        2 -> startActivity(Intent(this, ShareNearbyActivity::class.java))
+                        3 -> ApkShare.shareLink(this)
+                    }
+                } catch (e: Exception) {
+                    Toast.makeText(this, "Couldn't share: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+            .show()
     }
 
     // ---------------------------------------------------------------- chat
