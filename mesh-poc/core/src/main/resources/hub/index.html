@@ -49,6 +49,7 @@
   .meta { font-size: .75rem; color: var(--muted); margin: 0 6px 2px; }
   .bubble { background: var(--bubble); border: 1px solid var(--line); border-radius: 16px; padding: 8px 12px; max-width: min(80%, 520px); white-space: pre-wrap; overflow-wrap: anywhere; }
   .mine .bubble { background: var(--mine); }
+  .msg.pending { opacity: .6; }
   .media { max-width: min(80%, 420px); border-radius: 14px; overflow: hidden; border: 1px solid var(--line); background: #000; }
   .media img, .media video { display: block; width: 100%; max-height: 60vh; object-fit: contain; background: #000; }
   .media + .bubble { margin-top: 4px; }
@@ -166,6 +167,9 @@
   let lastSeq = 0;
   let lastDay = '';
   let es = null;
+  let lastBeat = 0;
+  let hiddenAt = 0;
+  const pendingEls = []; // own text messages shown before the hub confirms them
 
   function toast(msg) {
     $('toast').innerHTML = '';
@@ -233,6 +237,10 @@
 
   function render(m) {
     const empty = $('empty'); if (empty) empty.remove();
+    if (m.cid === cid && !m.media) {
+      const i = pendingEls.findIndex((p) => p.text === m.text);
+      if (i >= 0) { pendingEls[i].el.remove(); pendingEls.splice(i, 1); }
+    }
     const stick = nearBottom() || m.cid === cid;
     const day = dayLabel(m.ts);
     if (day !== lastDay) {
@@ -255,7 +263,10 @@
         box.appendChild(v);
       } else {
         const a = document.createElement('a'); a.href = src; a.target = '_blank'; a.rel = 'noopener';
-        const img = document.createElement('img'); img.src = src; img.alt = 'Photo from ' + m.from; img.loading = 'lazy';
+        const img = document.createElement('img');
+        img.src = m.thumb ? '/media/' + encodeURIComponent(m.thumb) + '?' + K : src;
+        img.alt = 'Photo from ' + m.from; img.loading = 'lazy'; img.decoding = 'async';
+        img.fetchPriority = 'low'; img.setAttribute('fetchpriority', 'low');
         img.addEventListener('load', () => { if (stick) list.scrollTop = list.scrollHeight; });
         a.appendChild(img); box.appendChild(a);
       }
@@ -272,8 +283,11 @@
   function connect() {
     if (es) es.close();
     es = new EventSource('/api/events?' + K + '&after=' + lastSeq);
-    es.onopen = () => setStatus(true);
+    lastBeat = Date.now();
+    es.onopen = () => { lastBeat = Date.now(); setStatus(true); };
+    es.addEventListener('ping', () => { lastBeat = Date.now(); });
     es.onmessage = (e) => {
+      lastBeat = Date.now();
       let m; try { m = JSON.parse(e.data); } catch { return; }
       if (m.seq <= lastSeq) return;
       lastSeq = m.seq; render(m);
@@ -283,9 +297,16 @@
       if (es.readyState === EventSource.CLOSED) setTimeout(start, 3000);
     };
   }
+  // Phones pause the app in the background; a connection can then look open but be dead.
+  // Reconnect when the app comes back, and whenever the hub's heartbeat goes quiet.
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && (!es || es.readyState !== EventSource.OPEN)) start();
+    if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); return; }
+    if (!es || es.readyState !== EventSource.OPEN || Date.now() - hiddenAt > 5000) start();
   });
+  window.addEventListener('online', () => start());
+  setInterval(() => {
+    if (document.visibilityState === 'visible' && es && Date.now() - lastBeat > 35000) start();
+  }, 5000);
 
   async function start() {
     if (!key) { $('gate').hidden = false; return; }
@@ -322,19 +343,32 @@
     p.querySelector('i').style.width = Math.round(frac * 100) + '%';
   }
 
-  async function shrinkImage(f) {
-    if (!f.type.startsWith('image/') || f.type === 'image/gif' || f.size < 400 * 1024) return f;
+  async function resizeImage(f, max, quality) {
+    const url = URL.createObjectURL(f);
     try {
-      const url = URL.createObjectURL(f);
       const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
-      const scale = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+      const scale = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
       const c = document.createElement('canvas');
       c.width = Math.round(img.naturalWidth * scale); c.height = Math.round(img.naturalHeight * scale);
       c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-      URL.revokeObjectURL(url);
-      const blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.82));
+      return await new Promise((r) => c.toBlob(r, 'image/jpeg', quality));
+    } finally { URL.revokeObjectURL(url); }
+  }
+  const isPhoto = (f) => f.type.startsWith('image/') && f.type !== 'image/gif';
+  async function shrinkImage(f) {
+    if (!isPhoto(f) || f.size < 400 * 1024) return f;
+    try {
+      const blob = await resizeImage(f, 1600, 0.82);
       return blob && blob.size < f.size ? new File([blob], 'photo.jpg', { type: 'image/jpeg' }) : f;
     } catch { return f; }
+  }
+  /** Small preview shown in the chat, so the list loads fast; the full photo opens on tap. */
+  async function makeThumb(f) {
+    if (!isPhoto(f)) return null;
+    try {
+      const blob = await resizeImage(f, 640, 0.7);
+      return blob ? new File([blob], 'thumb.jpg', { type: 'image/jpeg' }) : null;
+    } catch { return null; }
   }
 
   function upload(file, label) {
@@ -354,8 +388,19 @@
 
   async function post(fields) {
     const body = new URLSearchParams({ name, cid, ...fields });
-    const r = await fetch('/api/send?' + K, { method: 'POST', body });
+    const r = await fetch('/api/send?' + K, { method: 'POST', body, priority: 'high' });
     if (!r.ok) throw new Error('Send failed (' + r.status + ')');
+  }
+
+  /** Shows your message straight away; it is replaced when the hub confirms it. */
+  function showSending(msg) {
+    const empty = $('empty'); if (empty) empty.remove();
+    const row = document.createElement('div'); row.className = 'msg mine pending';
+    const meta = document.createElement('div'); meta.className = 'meta'; meta.textContent = 'Sending…';
+    const b = document.createElement('div'); b.className = 'bubble'; b.textContent = msg;
+    row.append(meta, b); list.appendChild(row); list.scrollTop = list.scrollHeight;
+    const p = { text: msg, el: row }; pendingEls.push(p);
+    return p;
   }
 
   let busy = false;
@@ -368,16 +413,24 @@
     if (!msg && !toSend.length) return;
     busy = true; sendBtn.disabled = true;
     text.value = ''; autosize(); pending = []; renderPending();
+    let optimistic = null;
+    if (msg && !toSend.length) optimistic = showSending(msg);
     try {
       if (!toSend.length) await post({ text: msg });
       for (let i = 0; i < toSend.length; i++) {
         const label = 'Sending ' + (i + 1) + ' of ' + toSend.length + '…';
         showProgress(label, 0);
+        const thumbFile = await makeThumb(toSend[i]);
+        const thumb = thumbFile ? await upload(thumbFile, label) : null;
         const f = await shrinkImage(toSend[i]);
         const up = await upload(f, label);
-        await post({ text: i === 0 ? msg : '', media: up.id, mediaType: up.type });
+        await post({ text: i === 0 ? msg : '', media: up.id, mediaType: up.type, thumb: thumb ? thumb.id : '' });
       }
     } catch (err) {
+      if (optimistic) {
+        optimistic.el.remove();
+        const i = pendingEls.indexOf(optimistic); if (i >= 0) pendingEls.splice(i, 1);
+      }
       toast(err.message || 'Could not send');
       if (msg && !text.value) text.value = msg;
       pending = toSend.concat(pending); renderPending();

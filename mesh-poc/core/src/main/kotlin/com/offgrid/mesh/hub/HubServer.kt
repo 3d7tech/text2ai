@@ -27,6 +27,8 @@ class HubServer(
     private val store: HubStore,
     val key: String,
     private val appName: String = "Family Chat",
+    /** How often an idle event stream sends a heartbeat. */
+    private val heartbeatMs: Long = 15_000,
 ) : MiniHttpServer("hub") {
 
     companion object {
@@ -107,9 +109,10 @@ class HubServer(
         out.flush()
         try {
             while (!Thread.currentThread().isInterrupted) {
-                val batch = store.awaitAfter(last, 15_000)
+                val batch = store.awaitAfter(last, heartbeatMs)
                 val sb = StringBuilder()
-                if (batch.isEmpty()) sb.append(": ping\n\n")
+                // A named heartbeat the app can see, so it notices a dead connection and reconnects.
+                if (batch.isEmpty()) sb.append("event: ping\ndata: {}\n\n")
                 for (m in batch) {
                     sb.append("id: ").append(m.seq).append("\ndata: ").append(m.toJson()).append("\n\n")
                     last = m.seq
@@ -131,7 +134,9 @@ class HubServer(
         if (mediaId != null && mediaType == null) throw HttpError(400, "unknown media")
         val text = f["text"].orEmpty()
         if (text.isBlank() && mediaId == null) throw HttpError(400, "empty message")
-        val m = store.add(f["name"].orEmpty(), text, mediaId, mediaType, "web", f["cid"].orEmpty())
+        val thumbId = f["thumb"]?.takeIf { it.isNotEmpty() }
+        if (thumbId != null && store.media(thumbId)?.second?.startsWith("image/") != true) throw HttpError(400, "unknown thumbnail")
+        val m = store.add(f["name"].orEmpty(), text, mediaId, mediaType, "web", f["cid"].orEmpty(), thumbId)
         runCatching { onWebMessage?.invoke(m) }
         res.json(200, """{"seq":${m.seq}}""")
     }
