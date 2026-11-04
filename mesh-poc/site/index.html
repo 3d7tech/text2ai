@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Offgrid Mesh PoC</title>
+<style>
+  :root { --bg:#f7f5f0; --fg:#1d1b18; --muted:#6b655c; --card:#fff; --line:#e4dfd5; --accent:#0f7a55; --accent-fg:#fff; --warn:#8a5a00; --warn-bg:#fff4dc; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14130f; --fg:#eeeae2; --muted:#a39d92; --card:#1e1c18; --line:#34302a; --accent:#3fbf8c; --accent-fg:#06140e; --warn:#f2c46b; --warn-bg:#2b2416; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  main { max-width: 640px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 1.9rem; line-height:1.2; margin: 0 0 8px; }
+  h2 { font-size: 1.1rem; margin: 32px 0 8px; }
+  p.lede { color: var(--muted); margin: 0 0 24px; }
+  .btn { display:block; text-align:center; background:var(--accent); color:var(--accent-fg); text-decoration:none; font-weight:600; padding:14px 18px; border-radius:12px; font-size:1.05rem; }
+  .meta { color:var(--muted); font-size:.85rem; text-align:center; margin-top:8px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; }
+  .note { background:var(--warn-bg); color:var(--fg); border-left:4px solid var(--warn); border-radius:8px; padding:12px 14px; margin:24px 0; font-size:.95rem; }
+  ol, ul { padding-left: 1.2rem; margin: 0; }
+  li { margin: 6px 0; }
+  code { background: var(--line); border-radius: 4px; padding: 1px 5px; font-size: .9em; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Offgrid Mesh</h1>
+  <p class="lede">Chat phone-to-phone with no internet and no mobile network. Messages hop between phones over Bluetooth and Wi-Fi Aware.</p>
+
+  <a class="btn" href="offgrid-mesh.apk" download>Download for Android (APK)</a>
+  <p class="meta">Test build · commit __COMMIT__ · __DATE__ · Android 8.0+</p>
+
+  <div class="note"><strong>This page can't send messages itself.</strong> Browsers can't use Wi-Fi Aware or act as a Bluetooth device, so the messaging only works in the installed app. iPhone isn't supported yet.</div>
+
+  <h2>Install</h2>
+  <div class="card"><ol>
+    <li>Tap <strong>Download</strong>, then open the file.</li>
+    <li>If asked, allow your browser to <em>install unknown apps</em>.</li>
+    <li>Open <strong>Offgrid Mesh PoC</strong> and allow the <em>Nearby devices</em> / Bluetooth permissions.</li>
+    <li>Make sure Bluetooth and Wi-Fi are switched <strong>on</strong>. Wi-Fi doesn't need to connect to a network.</li>
+  </ol></div>
+
+  <h2>Test with 2–3 phones</h2>
+  <div class="card"><ol>
+    <li>Turn off mobile data, and disconnect from any Wi-Fi network (leave Wi-Fi switched on).</li>
+    <li>Set a name: <code>/nick Amaka</code></li>
+    <li>Send a message. The top bar shows neighbors per radio (<code>ble</code>, <code>aware</code>).</li>
+    <li><strong>Hop test:</strong> put A and C out of range of each other, with B in the middle. A's message reaches C through B ("2 hops").</li>
+    <li><strong>Carry test:</strong> A sends while only B is near. Walk B over to C, and C receives it.</li>
+    <li>Private message: <code>/peers</code>, then <code>/dm Amaka hello</code></li>
+  </ol></div>
+
+  <h2>Known limits</h2>
+  <ul>
+    <li>Not encrypted yet. Don't send anything sensitive.</li>
+    <li>Text only. Photos and voice are coming.</li>
+    <li>Wi-Fi Aware needs a supported phone (many Pixel and Samsung models). Bluetooth works on all phones.</li>
+  </ul>
+</main>
+</body>
+</html>
