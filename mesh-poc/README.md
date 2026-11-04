@@ -57,8 +57,14 @@ an Android device (ideally a plugged-in tablet) running the app with **Hub → R
 - Bridging: browser text is re-broadcast on the mesh under the sender's name (media becomes a short note);
   public mesh messages appear in the browsers, marked "via mesh".
 
+**Chromebook (or any computer) as the hub:** Chromebooks can't install the APK, so the hub also ships as a
+single file, `offgrid-hub.jar`, built in CI and published on the download page. In the Chromebook's Linux terminal:
+`sudo apt install -y default-jre-headless && java -jar offgrid-hub.jar`, then forward port 8090
+(Settings → Developers → Linux → Port forwarding). The chat's **Invite** button shows a QR code for other devices.
+A Chromebook hub isn't on the radio mesh (no bridge to Android phones). The household key is kept in `~/offgrid-hub/household.key`.
+
 Code: `core/.../hub/` (HTTP server, store, routes; JVM-tested) and `core/src/main/resources/hub/index.html` (web app).
-Try it on a laptop: `gradle -p core runHubDemo`, then open http://127.0.0.1:8090/?k=demokey123
+Try it on a laptop: `gradle -p core runHubDemo -PhubArgs="--key demokey123"`, then open http://127.0.0.1:8090/?k=demokey123
 
 Known limits: the hub is a single point (if it's off, browsers can't chat); videos recorded in HEVC on iPhones
 may not play on Chromebooks or older Android (set iPhone Camera → Formats → Most Compatible); no encryption yet.

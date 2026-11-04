@@ -17,6 +17,7 @@ import java.security.SecureRandom
  * GET  /manifest.webmanifest     PWA manifest (start_url carries the key)
  * GET  /api/events?after=N       Server-Sent Events stream of messages
  * GET  /api/history?after=N      JSON array of messages
+ * GET  /api/qr.svg?text=…        QR code (used by the Invite screen)
  * POST /api/send                 form: name, cid, text, media, mediaType
  * POST /api/upload               raw body, Content-Type image/(any) or video/(any)
  * GET  /media/{id}               file, with Range support (needed for iOS video)
@@ -65,6 +66,11 @@ class HubServer(
                 when {
                     get && p == "/api/events" -> events(req, res)
                     get && p == "/api/history" -> history(req, res)
+                    get && p == "/api/qr.svg" -> {
+                        val text = req.query["text"].orEmpty()
+                        if (text.isEmpty() || text.length > 500) throw HttpError(400, "text required (max 500 chars)")
+                        res.send(200, "image/svg+xml", QrSvg.svg(text).toByteArray(), mapOf("Cache-Control" to "no-store"), head)
+                    }
                     req.method == "POST" && p == "/api/send" -> send(req, res)
                     req.method == "POST" && p == "/api/upload" -> upload(req, res)
                     get && p.startsWith("/media/") -> media(req, res, p.removePrefix("/media/"), head)

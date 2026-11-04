@@ -184,6 +184,17 @@ class HubServerTest {
         assertNotNull(HubServer.newKey().takeIf { it.length == 10 })
     }
 
+    @Test fun `invite QR code is drawn by the hub and needs the key`() {
+        hub.start(0)
+        assertEquals(401, conn("/api/qr.svg?text=x", key = false).responseCode)
+        assertEquals(400, conn("/api/qr.svg").responseCode)
+        val c = conn("/api/qr.svg?text=" + URLEncoder.encode("http://192.168.1.20:8090/?k=testkey123", "UTF-8"))
+        assertEquals(200, c.responseCode)
+        assertEquals("image/svg+xml", c.contentType)
+        val svg = c.inputStream.readBytes().decodeToString()
+        assertTrue(svg.startsWith("<svg") && svg.contains("h1v1h-1z"))
+    }
+
     @Test fun `range parsing edge cases`() {
         assertNull(parseRange(null, 10)); assertNull(parseRange("bytes=0-1,3-4", 10)); assertNull(parseRange("items=0-1", 10))
         assertEquals(0L to 9L, parseRange("bytes=0-", 10))

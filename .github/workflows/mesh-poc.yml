@@ -37,6 +37,9 @@ jobs:
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --console=plain
 
+      - name: Build standalone hub (Chromebook / computer)
+        run: ./gradlew :core:hubJar --console=plain
+
       - name: Android lint (report only)
         run: ./gradlew :app:lintDebug --console=plain
 
@@ -53,12 +56,15 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: offgrid-mesh-apk
-          path: mesh-poc/app/build/outputs/apk/debug/app-debug.apk
+          path: |
+            mesh-poc/app/build/outputs/apk/debug/app-debug.apk
+            mesh-poc/core/build/hub/offgrid-hub.jar
 
       - name: Assemble download page
         run: |
           mkdir -p _site
           cp app/build/outputs/apk/debug/app-debug.apk _site/offgrid-mesh.apk
+          cp core/build/hub/offgrid-hub.jar _site/offgrid-hub.jar
           sed -e "s/__COMMIT__/${GITHUB_SHA::7}/g" -e "s/__DATE__/$(date -u +%Y-%m-%d)/g" site/index.html > _site/index.html
 
       - name: Upload Pages artifact
