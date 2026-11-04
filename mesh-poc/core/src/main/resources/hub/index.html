@@ -38,9 +38,33 @@
     border-bottom: 1px solid var(--line); background: var(--bg);
   }
   header h1 { font-size: 1.1rem; margin: 0; flex: 1; }
-  #status { font-size: .8rem; color: var(--muted); display: flex; align-items: center; gap: 6px; }
-  #status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--bad); }
-  #status.on::before { background: var(--ok); }
+  .status { font-size: .8rem; color: var(--muted); display: flex; align-items: center; gap: 6px; flex: none; }
+  .status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--bad); }
+  .status.on::before { background: var(--ok); }
+  .view { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+  .view[hidden] { display: none; }
+  header h1 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  header .back { border: 0; padding: 6px 4px; font-weight: 600; color: var(--accent); font-size: 1rem; flex: none; }
+  #roomMenuBtn { font-size: 1.1rem; line-height: 1; padding: 4px 10px; }
+  .rooms { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .room { display: flex; gap: 12px; align-items: center; width: 100%; text-align: left; padding: 12px 16px; background: none; border: 0; border-bottom: 1px solid var(--line); color: var(--fg); font: inherit; cursor: pointer; }
+  .room:focus-visible, .opts:focus-visible, .sheet button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .room .av { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--mine); color: var(--accent); font-weight: 700; flex: none; }
+  .room .main { flex: 1; min-width: 0; }
+  .room .nm { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .room .pv { color: var(--muted); font-size: .86rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .room .side { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; font-size: .75rem; color: var(--muted); flex: none; }
+  .badge { background: var(--accent); color: var(--accent-fg); border-radius: 999px; min-width: 20px; padding: 2px 6px; text-align: center; font-weight: 700; font-size: .72rem; }
+  .homebar { padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); }
+  .homebar button { width: 100%; padding: 13px; border-radius: 12px; border: 0; background: var(--accent); color: var(--accent-fg); font: inherit; font-weight: 600; }
+  .opts { border: 0; background: none; color: var(--muted); font-size: .95rem; padding: 0 2px 0 6px; cursor: pointer; line-height: 1; }
+  .bubble.gone { font-style: italic; color: var(--muted); background: transparent; }
+  .sheet { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: flex; align-items: flex-end; justify-content: center; z-index: 11; }
+  .sheet[hidden] { display: none; }
+  .sheet .panel { background: var(--bg); width: 100%; max-width: 520px; border-radius: 18px 18px 0 0; padding: 14px 16px calc(16px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 8px; }
+  .sheet .panel p { margin: 0 0 4px; color: var(--muted); font-size: .9rem; text-align: center; }
+  .sheet button { padding: 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--bubble); color: var(--fg); font: inherit; font-weight: 600; }
+  .sheet button.danger { color: var(--bad); }
   header button { background: none; border: 1px solid var(--line); color: var(--fg); border-radius: 999px; padding: 4px 12px; font: inherit; font-size: .85rem; }
   #list { flex: 1; overflow-y: auto; padding: 12px 16px; -webkit-overflow-scrolling: touch; }
   .day { text-align: center; color: var(--muted); font-size: .78rem; margin: 14px 0 6px; }
@@ -102,20 +126,31 @@
   #qrImg:not([src]) { visibility: hidden; }
   #inviteUrl { font: .85rem ui-monospace, Menlo, monospace; overflow-wrap: anywhere; text-align: center; margin-bottom: 12px; user-select: all; }
   .card .secondary { background: none; color: var(--fg); border: 1px solid var(--line); margin-top: 8px; }
-  @media (max-width: 420px) { #status { font-size: 0; gap: 0; } header { gap: 8px; } }
+  @media (max-width: 420px) { .status { font-size: 0; gap: 0; } header { gap: 8px; } }
   #toast { position: fixed; left: 16px; right: 16px; bottom: calc(80px + env(safe-area-inset-bottom)); text-align: center; pointer-events: none; }
   #toast span { display: inline-block; background: var(--fg); color: var(--bg); padding: 8px 14px; border-radius: 10px; font-size: .9rem; }
   #toast:empty { display: none; }
 </style>
 </head>
 <body>
+<section id="home" class="view">
 <header>
   <h1>Family Chat</h1>
-  <div id="status">Connecting…</div>
+  <div class="status">Connecting…</div>
   <button id="inviteBtn" type="button">Invite</button>
   <button id="rename" type="button">Name</button>
 </header>
-<main id="list" aria-live="polite"><div id="empty">No messages yet. Say hello 👋</div></main>
+<main id="rooms" class="rooms" aria-label="Rooms"></main>
+<div class="homebar"><button id="newRoomBtn" type="button">+ New room</button></div>
+</section>
+<section id="chat" class="view" hidden>
+<header>
+  <button id="back" type="button" class="back" aria-label="Back to rooms">‹ Rooms</button>
+  <h1 id="roomTitle">Everyone</h1>
+  <div class="status"></div>
+  <button id="roomMenuBtn" type="button" aria-label="Room options" hidden>⋯</button>
+</header>
+<main id="list" aria-live="polite"></main>
 <div id="pending"></div>
 <div id="progress"></div>
 <form id="composer" autocomplete="off">
@@ -135,6 +170,7 @@
   <button type="button" id="recCancel">Cancel</button>
   <button type="button" id="recSend">Send</button>
 </div>
+</section>
 <div id="toast"></div>
 <div class="overlay" id="voiceTip" hidden>
   <div class="card">
@@ -168,6 +204,22 @@
     <p class="hint" style="text-align:center">Household code: <strong id="householdCode"></strong></p>
     <button type="button" id="copyInvite">Copy link</button>
     <button type="button" class="secondary" id="closeInvite">Done</button>
+  </div>
+</div>
+<div class="overlay" id="newRoom" hidden>
+  <form class="card" id="newRoomForm">
+    <h2>New room</h2>
+    <p>Everyone on the household Wi-Fi can see and join it. Only you can delete it.</p>
+    <input id="roomNameInput" maxlength="40" placeholder="e.g. Cousins, School run, Shop" autocomplete="off" required>
+    <button type="submit">Create room</button>
+    <button type="button" class="secondary" id="newRoomCancel">Cancel</button>
+  </form>
+</div>
+<div class="sheet" id="sheet" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <p id="sheetTitle"></p>
+    <div id="sheetActions" style="display:flex;flex-direction:column;gap:8px"></div>
+    <button type="button" id="sheetCancel">Cancel</button>
   </div>
 </div>
 <div class="overlay" id="namer" hidden>
@@ -211,13 +263,18 @@
   let lastBeat = 0;
   let hiddenAt = 0;
   const pendingEls = []; // own text messages shown before the hub confirms them
+  const rooms = new Map();       // id -> {id, name, by, ts}
+  const byRoom = new Map();      // id -> [messages]
+  const bySeq = new Map();       // seq -> message
+  let current = null;            // open room id, or null on the room list
+  const GENERAL = 'general';
 
   function toast(msg) {
     $('toast').innerHTML = '';
     const s = document.createElement('span'); s.textContent = msg; $('toast').appendChild(s);
     clearTimeout(toast.t); toast.t = setTimeout(() => { $('toast').innerHTML = ''; }, 4000);
   }
-  function setStatus(on) { const s = $('status'); s.classList.toggle('on', on); s.textContent = on ? 'Connected' : 'Reconnecting…'; }
+  function setStatus(on) { document.querySelectorAll('.status').forEach((s) => { s.classList.toggle('on', on); s.textContent = on ? 'Connected' : 'Reconnecting…'; }); }
 
   function askName() {
     $('nameInput').value = name;
@@ -290,7 +347,7 @@
   function render(m) {
     const empty = $('empty'); if (empty) empty.remove();
     if (m.cid === cid && !m.media) {
-      const i = pendingEls.findIndex((p) => p.text === m.text);
+      const i = pendingEls.findIndex((p) => p.text === m.text && p.room === m.room);
       if (i >= 0) { pendingEls[i].el.remove(); pendingEls.splice(i, 1); }
     }
     const stick = nearBottom() || m.cid === cid;
@@ -299,11 +356,28 @@
       lastDay = day;
       const d = document.createElement('div'); d.className = 'day'; d.textContent = day; list.appendChild(d);
     }
+    list.appendChild(buildRow(m, stick));
+    if (stick) list.scrollTop = list.scrollHeight;
+  }
+
+  function buildRow(m, stick) {
     const mine = m.cid === cid;
     const row = document.createElement('div'); row.className = 'msg' + (mine ? ' mine' : '');
+    row.dataset.seq = m.seq;
     const meta = document.createElement('div'); meta.className = 'meta';
     meta.textContent = (mine ? '' : m.from + ' · ') + fmtTime(m.ts) + (m.origin === 'mesh' ? ' · via mesh' : '');
+    if (mine && !m.deleted) {
+      const o = document.createElement('button'); o.type = 'button'; o.className = 'opts'; o.textContent = '⋯';
+      o.setAttribute('aria-label', 'Message options');
+      o.onclick = () => openSheet('Your message', [{ label: 'Delete for everyone', danger: true, run: () => deleteMessage(m.seq) }]);
+      meta.appendChild(o);
+    }
     row.appendChild(meta);
+    if (m.deleted) {
+      const b = document.createElement('div'); b.className = 'bubble gone'; b.textContent = mine ? 'You deleted this message' : 'This message was deleted';
+      row.appendChild(b);
+      return row;
+    }
     if (m.media) {
       const box = document.createElement('div'); box.className = 'media';
       const src = '/media/' + encodeURIComponent(m.media) + '?' + K;
@@ -331,8 +405,161 @@
     if (m.text) {
       const b = document.createElement('div'); b.className = 'bubble'; b.textContent = m.text; row.appendChild(b);
     }
-    list.appendChild(row);
-    if (stick) list.scrollTop = list.scrollHeight;
+    return row;
+  }
+
+  // --- rooms, navigation and deleting
+  const seenKey = (r) => 'seen:' + key + ':' + r;
+  const seen = (r) => Number(store.get(seenKey(r)) || 0);
+  function markSeen(r) {
+    const arr = byRoom.get(r) || []; const last = arr.length ? arr[arr.length - 1].seq : 0;
+    if (last > seen(r)) store.set(seenKey(r), String(last));
+  }
+  function preview(m) {
+    if (!m) return 'No messages yet';
+    const who = m.cid === cid ? 'You: ' : m.from + ': ';
+    if (m.deleted) return who + 'message deleted';
+    const t = m.mediaType || '';
+    if (t.startsWith('audio/')) return who + '🎤 Voice note';
+    if (t.startsWith('video/')) return who + '🎬 Video' + (m.text ? ' · ' + m.text : '');
+    if (m.media) return who + '📷 Photo' + (m.text ? ' · ' + m.text : '');
+    return who + m.text;
+  }
+  let roomListQueued = false;
+  function queueRoomList() {
+    if (roomListQueued) return; roomListQueued = true;
+    requestAnimationFrame(() => { roomListQueued = false; if (current === null) renderRoomList(); });
+  }
+  function renderRoomList() {
+    const box = $('rooms'); box.innerHTML = '';
+    const items = [...rooms.values()].map((r) => {
+      const arr = byRoom.get(r.id) || [];
+      const last = arr[arr.length - 1];
+      const unread = arr.filter((m) => m.seq > seen(r.id) && m.cid !== cid && !m.deleted).length;
+      return { r, last, unread, at: last ? last.ts : r.ts };
+    }).sort((a, b) => (a.r.id === GENERAL ? -1 : b.r.id === GENERAL ? 1 : b.at - a.at));
+    for (const { r, last, unread } of items) {
+      const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'room';
+      const av = document.createElement('span'); av.className = 'av'; av.textContent = (r.name || '?').slice(0, 1).toUpperCase();
+      const main = document.createElement('span'); main.className = 'main';
+      const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = r.name;
+      const pv = document.createElement('div'); pv.className = 'pv'; pv.textContent = preview(last);
+      main.append(nm, pv);
+      const side = document.createElement('span'); side.className = 'side';
+      const tm = document.createElement('span'); tm.textContent = last ? (dayLabel(last.ts) === 'Today' ? fmtTime(last.ts) : dayLabel(last.ts)) : '';
+      side.appendChild(tm);
+      if (unread) { const bd = document.createElement('span'); bd.className = 'badge'; bd.textContent = unread > 99 ? '99+' : String(unread); bd.setAttribute('aria-label', unread + ' unread'); side.appendChild(bd); }
+      btn.append(av, main, side);
+      btn.onclick = () => openRoom(r.id, true);
+      box.appendChild(btn);
+    }
+  }
+  function renderChat() {
+    list.innerHTML = ''; lastDay = ''; pendingEls.length = 0;
+    const arr = byRoom.get(current) || [];
+    if (!arr.length) { const e = document.createElement('div'); e.id = 'empty'; e.textContent = 'No messages yet. Say hello 👋'; list.appendChild(e); }
+    arr.forEach(render);
+    list.scrollTop = list.scrollHeight;
+  }
+  const roomUrl = (id) => location.pathname + location.search + (id ? '#room-' + id : '');
+  function openRoom(id, push) {
+    const r = rooms.get(id); if (!r) return;
+    current = id;
+    $('home').hidden = true; $('chat').hidden = false;
+    $('roomTitle').textContent = r.name;
+    $('roomMenuBtn').hidden = !(id !== GENERAL && r.by && r.by === cid);
+    renderChat(); markSeen(id);
+    if (push) history.pushState({ room: id }, '', roomUrl(id));
+  }
+  function showHome() {
+    current = null; playingAudio && playingAudio.pause();
+    $('chat').hidden = true; $('home').hidden = false;
+    renderRoomList();
+  }
+  // ‹ Rooms, the phone's back gesture and Android's back button all lead to the room list.
+  $('back').addEventListener('click', () => {
+    if (history.state && history.state.room) history.back();
+    else { history.replaceState(null, '', roomUrl(null)); showHome(); }
+  });
+  window.addEventListener('popstate', () => {
+    const m = location.hash.match(/^#room-([0-9a-z]+)$/);
+    if (m && rooms.has(m[1])) openRoom(m[1], false); else showHome();
+  });
+
+  function openSheet(title, actions) {
+    $('sheetTitle').textContent = title;
+    const box = $('sheetActions'); box.innerHTML = '';
+    actions.forEach((a) => {
+      const b = document.createElement('button'); b.type = 'button'; b.textContent = a.label; if (a.danger) b.className = 'danger';
+      b.onclick = () => { $('sheet').hidden = true; a.run(); };
+      box.appendChild(b);
+    });
+    $('sheet').hidden = false;
+    const first = box.querySelector('button'); if (first) first.focus();
+  }
+  $('sheetCancel').addEventListener('click', () => { $('sheet').hidden = true; });
+  $('sheet').addEventListener('click', (e) => { if (e.target === $('sheet')) $('sheet').hidden = true; });
+
+  async function form(path, fields) {
+    const r = await fetch(path + '?' + K, { method: 'POST', body: new URLSearchParams({ cid, ...fields }) });
+    let text = ''; try { text = await r.text(); } catch {}
+    return { ok: r.ok, status: r.status, text };
+  }
+  async function deleteMessage(seq) {
+    try {
+      const r = await form('/api/delete', { seq: String(seq) });
+      if (!r.ok) toast(r.status === 403 ? 'You can only delete your own messages' : 'Could not delete the message');
+    } catch { toast('Could not reach the hub'); }
+  }
+  $('roomMenuBtn').addEventListener('click', () => {
+    const r = rooms.get(current); if (!r) return;
+    openSheet('“' + r.name + '”', [{ label: 'Delete room for everyone', danger: true, run: async () => {
+      try {
+        const res = await form('/api/rooms/delete', { id: r.id });
+        if (!res.ok) toast(res.status === 403 ? 'Only the person who made this room can delete it' : 'Could not delete the room');
+      } catch { toast('Could not reach the hub'); }
+    } }]);
+  });
+  $('newRoomBtn').addEventListener('click', () => {
+    if (!name) { askName(); return; }
+    $('roomNameInput').value = ''; $('newRoom').hidden = false; setTimeout(() => $('roomNameInput').focus(), 50);
+  });
+  $('newRoomCancel').addEventListener('click', () => { $('newRoom').hidden = true; });
+  $('newRoomForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const n = $('roomNameInput').value.trim(); if (!n) return;
+    try {
+      const r = await form('/api/rooms', { name: n });
+      if (!r.ok) { toast(r.text.includes('exists') ? 'A room with that name already exists' : 'Could not create the room'); return; }
+      const room = JSON.parse(r.text);
+      rooms.set(room.id, room); $('newRoom').hidden = true; openRoom(room.id, true);
+    } catch { toast('Could not reach the hub'); }
+  });
+
+  function handle(ev) {
+    if (ev.type === 'room') {
+      if (ev.action === 'create') rooms.set(ev.room.id, ev.room);
+      else {
+        rooms.delete(ev.room.id); byRoom.delete(ev.room.id);
+        if (current === ev.room.id) { history.replaceState(null, '', roomUrl(null)); showHome(); toast('“' + ev.room.name + '” was deleted'); }
+      }
+      queueRoomList(); return;
+    }
+    if (ev.type === 'del') {
+      const m = bySeq.get(ev.target); if (!m) return;
+      Object.assign(m, { deleted: true, text: '', media: null, mediaType: null, thumb: null });
+      const old = list.querySelector('[data-seq="' + ev.target + '"]');
+      if (old && m.room === current) old.replaceWith(buildRow(m, false));
+      queueRoomList(); return;
+    }
+    const m = ev;
+    if (!m.room) m.room = GENERAL;
+    if (bySeq.has(m.seq)) return;
+    bySeq.set(m.seq, m);
+    if (!byRoom.has(m.room)) byRoom.set(m.room, []);
+    byRoom.get(m.room).push(m);
+    if (m.room === current) { render(m); if (document.visibilityState === 'visible') markSeen(current); }
+    queueRoomList();
   }
 
   // --- voice player (WhatsApp-style: play, progress, time, speed)
@@ -523,6 +750,7 @@
   async function sendVoice(file) {
     if (busy) { toast('Wait for the last message to finish sending'); return; }
     busy = true; sendBtn.disabled = true;
+    const room = current || GENERAL;
     try {
       showProgress('Preparing voice note…', 0);
       let out;
@@ -535,7 +763,7 @@
       }
       const label = 'Sending voice note (' + fmtMB(out.size) + ')…';
       const up = await upload(new File([out], 'voice.m4a', { type: out.type || 'audio/mp4' }), label);
-      await post({ text: '', media: up.id, mediaType: up.type });
+      await post({ text: '', media: up.id, mediaType: up.type, room });
     } catch (err) {
       toast(err.message || 'Could not send the voice note');
     } finally {
@@ -554,7 +782,7 @@
       lastBeat = Date.now();
       let m; try { m = JSON.parse(e.data); } catch { return; }
       if (m.seq <= lastSeq) return;
-      lastSeq = m.seq; render(m);
+      lastSeq = m.seq; handle(m);
     };
     es.onerror = () => {
       setStatus(false);
@@ -565,6 +793,7 @@
   // Reconnect when the app comes back, and whenever the hub's heartbeat goes quiet.
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); return; }
+    if (current) markSeen(current);
     if (!es || es.readyState !== EventSource.OPEN || Date.now() - hiddenAt > 5000) start();
   });
   window.addEventListener('online', () => start());
@@ -572,12 +801,22 @@
     if (document.visibilityState === 'visible' && es && Date.now() - lastBeat > 35000) start();
   }, 5000);
 
+  let started = false;
   async function start() {
     if (!key) { $('gate').hidden = false; return; }
     try {
-      const r = await fetch('/api/history?' + K + '&after=999999999999', { cache: 'no-store' });
+      const r = await fetch('/api/rooms?' + K, { cache: 'no-store' });
       if (r.status === 401) { $('gate').hidden = false; setStatus(false); return; }
+      const roomList = await r.json();
+      rooms.clear(); roomList.forEach((x) => rooms.set(x.id, x));
     } catch { setStatus(false); setTimeout(start, 3000); return; }
+    if (!started) {
+      started = true;
+      const m = location.hash.match(/^#room-([0-9a-z]+)$/);
+      history.replaceState(null, '', roomUrl(null));
+      if (m && rooms.has(m[1])) openRoom(m[1], true); else showHome();
+    } else if (current !== null && !rooms.has(current)) showHome();
+    else if (current === null) renderRoomList();
     connect();
   }
 
@@ -651,7 +890,7 @@
   }
 
   async function post(fields) {
-    const body = new URLSearchParams({ name, cid, ...fields });
+    const body = new URLSearchParams({ name, cid, room: current || GENERAL, ...fields });
     const r = await fetch('/api/send?' + K, { method: 'POST', body, priority: 'high' });
     if (!r.ok) throw new Error('Send failed (' + r.status + ')');
   }
@@ -663,7 +902,7 @@
     const meta = document.createElement('div'); meta.className = 'meta'; meta.textContent = 'Sending…';
     const b = document.createElement('div'); b.className = 'bubble'; b.textContent = msg;
     row.append(meta, b); list.appendChild(row); list.scrollTop = list.scrollHeight;
-    const p = { text: msg, el: row }; pendingEls.push(p);
+    const p = { text: msg, el: row, room: current }; pendingEls.push(p);
     return p;
   }
 
@@ -676,11 +915,12 @@
     const toSend = pending.slice();
     if (!msg && !toSend.length) return;
     busy = true; sendBtn.disabled = true;
+    const room = current || GENERAL;
     text.value = ''; autosize(); pending = []; renderPending();
     let optimistic = null;
     if (msg && !toSend.length) optimistic = showSending(msg);
     try {
-      if (!toSend.length) await post({ text: msg });
+      if (!toSend.length) await post({ text: msg, room });
       for (let i = 0; i < toSend.length; i++) {
         const label = 'Sending ' + (i + 1) + ' of ' + toSend.length + '…';
         showProgress(label, 0);
@@ -698,14 +938,14 @@
           const vlabel = 'Sending video (' + fmtMB(out.blob.size) + ')…';
           const vfile = out.blob === toSend[i] ? toSend[i] : new File([out.blob], 'video.mp4', { type: 'video/mp4' });
           const up = await upload(vfile, vlabel);
-          await post({ text: i === 0 ? msg : '', media: up.id, mediaType: up.type, thumb: poster ? poster.id : '' });
+          await post({ text: i === 0 ? msg : '', media: up.id, mediaType: up.type, thumb: poster ? poster.id : '', room });
           continue;
         }
         const thumbFile = await makeThumb(toSend[i]);
         const thumb = thumbFile ? await upload(thumbFile, label) : null;
         const f = await shrinkImage(toSend[i]);
         const up = await upload(f, label);
-        await post({ text: i === 0 ? msg : '', media: up.id, mediaType: up.type, thumb: thumb ? thumb.id : '' });
+        await post({ text: i === 0 ? msg : '', media: up.id, mediaType: up.type, thumb: thumb ? thumb.id : '', room });
       }
     } catch (err) {
       if (optimistic) {

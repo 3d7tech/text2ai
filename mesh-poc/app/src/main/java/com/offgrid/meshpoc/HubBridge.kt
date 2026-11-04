@@ -47,6 +47,7 @@ class HubBridge(context: Context, private val node: MeshNode) : MeshNode.Listene
     }
 
     private fun toMesh(m: HubMessage) {
+        if (m.room != HubStore.GENERAL) return // private rooms stay on the hub
         val note = when {
             m.mediaType?.startsWith("video/") == true -> "🎬 sent a video (open Family Chat to watch)"
             m.mediaType?.startsWith("audio/") == true -> "🎤 sent a voice note (open Family Chat to listen)"

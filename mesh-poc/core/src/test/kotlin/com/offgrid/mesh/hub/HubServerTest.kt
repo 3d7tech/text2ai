@@ -283,6 +283,55 @@ class HubServerTest {
         c.disconnect()
     }
 
+    private fun form(path: String, body: String): HttpURLConnection {
+        val c = conn(path, "POST"); c.doOutput = true
+        c.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+        c.outputStream.use { it.write(body.toByteArray()) }
+        return c
+    }
+
+    @Test fun `rooms can be created, used and deleted by their creator`() {
+        hub.start(0)
+        val rooms0 = conn("/api/rooms").inputStream.readBytes().decodeToString()
+        assertTrue("\"id\":\"general\"" in rooms0 && "Everyone" in rooms0)
+        val c = form("/api/rooms", "name=Cousins&cid=ada")
+        assertEquals(200, c.responseCode)
+        val id = Regex("\"id\":\"([0-9a-f]{8})\"").find(c.inputStream.readBytes().decodeToString())!!.groupValues[1]
+        assertEquals(400, form("/api/rooms", "name=cousins&cid=bob").responseCode) // duplicate name
+        assertEquals(400, form("/api/rooms", "name=%20&cid=bob").responseCode)
+        assertEquals(200, form("/api/send", "name=Ada&cid=ada&text=hi+cousins&room=$id").responseCode)
+        assertEquals(400, form("/api/send", "name=Ada&cid=ada&text=x&room=deadbeef").responseCode)
+        val hist = conn("/api/history").inputStream.readBytes().decodeToString()
+        assertTrue("\"room\":\"$id\"" in hist && "\"type\":\"room\"" in hist)
+        assertEquals(403, form("/api/rooms/delete", "id=$id&cid=bob").responseCode)
+        assertEquals(403, form("/api/rooms/delete", "id=general&cid=ada").responseCode)
+        assertEquals(200, form("/api/rooms/delete", "id=$id&cid=ada").responseCode)
+        assertTrue(id !in conn("/api/rooms").inputStream.readBytes().decodeToString())
+        assertTrue("hi cousins" !in conn("/api/history").inputStream.readBytes().decodeToString())
+        // survives a restart
+        hub.stop(); store = HubStore(dir); hub = HubServer(store, "testkey123"); hub.start(0)
+        assertTrue(id !in conn("/api/rooms").inputStream.readBytes().decodeToString())
+    }
+
+    @Test fun `senders can delete their own messages for everyone`() {
+        hub.start(0)
+        val media = idOf(upload(byteArrayOf(1, 2, 3, 4), "image/jpeg").inputStream.readBytes().decodeToString())
+        assertEquals(200, form("/api/send", "name=Ada&cid=ada&text=secret+plan&media=$media").responseCode)
+        val seq = store.latestSeq
+        assertEquals(403, form("/api/delete", "seq=$seq&cid=bob").responseCode)
+        assertEquals(404, form("/api/delete", "seq=999&cid=ada").responseCode)
+        val ok = form("/api/delete", "seq=$seq&cid=ada")
+        assertEquals(200, ok.responseCode)
+        assertTrue("\"type\":\"del\"" in ok.inputStream.readBytes().decodeToString())
+        assertEquals(404, form("/api/delete", "seq=$seq&cid=ada").responseCode) // already deleted
+        val hist = conn("/api/history").inputStream.readBytes().decodeToString()
+        assertTrue("secret plan" !in hist && "\"deleted\":true" in hist && "\"target\":$seq" in hist)
+        assertEquals(404, conn("/media/$media").responseCode) // the photo is gone from the hub
+        assertTrue("secret" !in File(dir, "messages.tsv").readText()) // and from the log on disk
+        hub.stop(); store = HubStore(dir); hub = HubServer(store, "testkey123"); hub.start(0)
+        assertEquals(true, store.message(seq)?.deleted)
+    }
+
     @Test fun `range parsing edge cases`() {
         assertNull(parseRange(null, 10)); assertNull(parseRange("bytes=0-1,3-4", 10)); assertNull(parseRange("items=0-1", 10))
         assertEquals(0L to 9L, parseRange("bytes=0-", 10))

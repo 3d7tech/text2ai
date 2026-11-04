@@ -18,7 +18,10 @@ import java.security.SecureRandom
  * GET  /api/events?after=N       Server-Sent Events stream of messages
  * GET  /api/history?after=N      JSON array of messages
  * GET  /api/qr.svg?text=…        QR code (used by the Invite screen)
- * POST /api/send                 form: name, cid, text, media, mediaType
+ * GET  /api/rooms                rooms; POST /api/rooms (name, cid) creates one
+ * POST /api/rooms/delete         form: id, cid (creator only)
+ * POST /api/delete               form: seq, cid (sender only; removes text and media from the hub)
+ * POST /api/send                 form: name, cid, text, media, mediaType, thumb, room
  * POST /api/upload               raw body, Content-Type image/, video/ or audio/ (any subtype)
  * GET  /media/{id}               file, with Range support (needed for iOS video)
  * ```
@@ -74,6 +77,10 @@ class HubServer(
                 when {
                     get && p == "/api/events" -> events(req, res)
                     get && p == "/api/history" -> history(req, res)
+                    get && p == "/api/rooms" -> res.json(200, store.rooms().joinToString(",", "[", "]") { it.toJson() })
+                    req.method == "POST" && p == "/api/rooms" -> createRoom(req, res)
+                    req.method == "POST" && p == "/api/rooms/delete" -> deleteRoom(req, res)
+                    req.method == "POST" && p == "/api/delete" -> deleteMessage(req, res)
                     get && p == "/api/qr.svg" -> {
                         val text = req.query["text"].orEmpty()
                         if (text.isEmpty() || text.length > 500) throw HttpError(400, "text required (max 500 chars)")
@@ -156,9 +163,46 @@ class HubServer(
         if (text.isBlank() && mediaId == null) throw HttpError(400, "empty message")
         val thumbId = f["thumb"]?.takeIf { it.isNotEmpty() }
         if (thumbId != null && store.media(thumbId)?.second?.startsWith("image/") != true) throw HttpError(400, "unknown thumbnail")
-        val m = store.add(f["name"].orEmpty(), text, mediaId, mediaType, "web", f["cid"].orEmpty(), thumbId)
+        val room = f["room"]?.takeIf { it.isNotEmpty() } ?: HubStore.GENERAL
+        if (store.rooms().none { it.id == room }) throw HttpError(400, "unknown room")
+        val m = store.add(f["name"].orEmpty(), text, mediaId, mediaType, "web", f["cid"].orEmpty(), thumbId, room)
         runCatching { onWebMessage?.invoke(m) }
         res.json(200, """{"seq":${m.seq}}""")
+    }
+
+    private fun createRoom(req: HttpRequest, res: HttpResponse) {
+        val f = req.form()
+        val r = try {
+            store.createRoom(f["name"].orEmpty(), f["cid"].orEmpty())
+        } catch (e: IllegalArgumentException) {
+            throw HttpError(400, e.message ?: "bad room")
+        }
+        res.json(200, r.toJson())
+    }
+
+    private fun deleteRoom(req: HttpRequest, res: HttpResponse) {
+        val f = req.form()
+        try {
+            store.deleteRoom(f["id"].orEmpty(), f["cid"].orEmpty())
+        } catch (e: NoSuchElementException) {
+            throw HttpError(404, e.message ?: "not found")
+        } catch (e: SecurityException) {
+            throw HttpError(403, e.message ?: "not allowed")
+        }
+        res.json(200, "{\"ok\":true}")
+    }
+
+    private fun deleteMessage(req: HttpRequest, res: HttpResponse) {
+        val f = req.form()
+        val seq = f["seq"]?.toLongOrNull() ?: throw HttpError(400, "seq required")
+        val d = try {
+            store.deleteMessage(seq, f["cid"].orEmpty())
+        } catch (e: NoSuchElementException) {
+            throw HttpError(404, e.message ?: "not found")
+        } catch (e: SecurityException) {
+            throw HttpError(403, e.message ?: "not allowed")
+        }
+        res.json(200, d.toJson())
     }
 
     private fun upload(req: HttpRequest, res: HttpResponse) {
